@@ -14,6 +14,7 @@ struct PhaseFollowUpSheet: View {
     @State private var isEvaluating: Bool = false
     @State private var progressStatus: String?
     @State private var errorMessage: String?
+    @State private var pendingRedFlag: RedFlagAssessment?
     @State private var evaluationResult: (response: AIPhaseTransitionResponse, source: AIServiceSource)?
 
     var body: some View {
@@ -106,6 +107,19 @@ struct PhaseFollowUpSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .sheet(item: $pendingRedFlag) { assessment in
+            RedFlagWarningSheet(
+                assessment: assessment,
+                onPauseAndLog: {
+                    dismiss()
+                },
+                onOverrideFalsePositive: {
+                    Task {
+                        await runEvaluation(bypassRedFlag: true)
+                    }
+                }
+            )
+        }
     }
 
     private var currentPhaseSummaryCard: some View {
@@ -335,7 +349,13 @@ struct PhaseFollowUpSheet: View {
         }
     }
 
-    private func runEvaluation() async {
+    private func runEvaluation(bypassRedFlag: Bool = false) async {
+        if !bypassRedFlag, let redFlag = RedFlagDetector.evaluate(input: userNote) {
+            HapticFeedback.notify(.warning)
+            pendingRedFlag = redFlag
+            return
+        }
+
         isEvaluating = true
         errorMessage = nil
         progressStatus = "正在进行复诊评估…"

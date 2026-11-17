@@ -62,7 +62,11 @@ final class DailyContextSnapshot {
     }
 
     var resolvedSolarTerm: (name: String, guidance: String) {
-        let computed = SolarTermCalculator.term(for: date)
+        let computed = SolarTermCalculator.climateCalibratedGuidance(
+            for: date,
+            tempC: weatherTempC,
+            humidity: weatherHumidity
+        )
         return (solarTermName.isEmpty ? computed.name : solarTermName, computed.guidance)
     }
 

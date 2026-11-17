@@ -60,6 +60,7 @@ enum AIStructuredSchemas {
             "required": [
                 "resolutionStatus",
                 "clarificationReason",
+                "redFlagAdvice",
                 "triageQuestions",
                 "proposedPhase",
                 "phaseSpec",
@@ -70,12 +71,16 @@ enum AIStructuredSchemas {
             "properties": [
                 "resolutionStatus": [
                     "type": "string",
-                    "enum": ["needsClarification", "readyToAdjust"],
-                    "description": "当用户症状寒热虚实不明确且未补充追问时填 needsClarification；偏好类调整或信息已充足时填 readyToAdjust"
+                    "enum": ["needsClarification", "readyToAdjust", "redFlagWarning"],
+                    "description": "命中黑便/便血/胸闷胸痛/剧烈腹痛/高热等器质性红线时填 redFlagWarning；需辨证追问填 needsClarification；可直接调整填 readyToAdjust"
                 ],
                 "clarificationReason": [
                     "type": "string",
                     "description": "若为 needsClarification，用1句话解释为何需要补充辨证（不超过45字）；否则填空字符串"
+                ],
+                "redFlagAdvice": [
+                    "type": "string",
+                    "description": "若为 redFlagWarning，给出建议就医科室与排查项目（如消化科查大便潜血）；否则填空字符串"
                 ],
                 "triageQuestions": [
                     "type": "array",

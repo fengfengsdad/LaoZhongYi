@@ -148,6 +148,7 @@ actor AIService {
         userInput: String,
         triageAnswers: [AITriageAnswer] = [],
         extraTriageNote: String? = nil,
+        bypassRedFlag: Bool = false,
         attachedImage: UIImage?,
         photoIntent: PhotoCheckInIntent = .auto,
         recognizedPhotoText: String? = nil,
@@ -156,7 +157,7 @@ actor AIService {
         onStreamProgress: @Sendable (String) -> Void
     ) async throws -> AIGenerationResult<AIAdjustmentResponse> {
         let config = AIConfiguration.load()
-        AILog.info("AIService", "发起「动态微调」 input=\"\(userInput)\", triageAnswers=\(triageAnswers.count), hasImage=\(attachedImage != nil), intent=\(photoIntent.rawValue), provider=\(config.provider.rawValue), model=\(config.model), streaming=\(config.enableStreaming), hasKey=\(config.hasValidKey)")
+        AILog.info("AIService", "发起「动态微调」 input=\"\(userInput)\", triageAnswers=\(triageAnswers.count), bypassRedFlag=\(bypassRedFlag), hasImage=\(attachedImage != nil), intent=\(photoIntent.rawValue), provider=\(config.provider.rawValue), model=\(config.model), streaming=\(config.enableStreaming), hasKey=\(config.hasValidKey)")
 
         guard config.hasValidKey, let primarySnapshot = snapshots.first else {
             AILog.info("AIService", "未检测到 API Key（或快照为空），走离线演示引擎")
@@ -164,7 +165,7 @@ actor AIService {
             let demo = try await simulateStreaming(
                 steps: [
                     "正在结合 \(fallbackSnapshot.city) \(Int(fallbackSnapshot.weatherTempC.rounded()))°C \(fallbackSnapshot.weatherCondition)与\(fallbackSnapshot.solarTermName)节气…",
-                    triageAnswers.isEmpty ? "正在评估是否需辨证寒热虚实…" : "正在依据轻问诊结果匹配证型与治则…",
+                    triageAnswers.isEmpty ? "正在评估安全红线与寒热虚实…" : "正在依据轻问诊结果匹配证型与治则…",
                     "正在生成结构化评估结果…"
                 ],
                 onStreamProgress: onStreamProgress
@@ -173,10 +174,12 @@ actor AIService {
                     input: userInput,
                     triageAnswers: triageAnswers,
                     extraTriageNote: extraTriageNote,
+                    bypassRedFlag: bypassRedFlag,
                     hasAttachedImage: attachedImage != nil,
                     photoIntent: photoIntent,
                     recognizedPhotoText: recognizedPhotoText,
                     diningEnvironment: profile?.diningEnvironment,
+                    dietaryPreferences: profile?.dietaryPreferences ?? [],
                     snapshot: fallbackSnapshot
                 )
             }
@@ -232,7 +235,8 @@ actor AIService {
                     weatherTempC: snapshot.weatherTempC,
                     weatherCondition: snapshot.weatherCondition,
                     city: snapshot.city,
-                    diningEnvironment: profile?.diningEnvironment
+                    diningEnvironment: profile?.diningEnvironment,
+                    dietaryPreferences: profile?.dietaryPreferences ?? []
                 )
                 return AICardSwapResponse(
                     title: fallback.title,
@@ -399,7 +403,8 @@ actor AIService {
                     hasTongueImage: tongueImage != nil,
                     city: city,
                     weatherTempC: weatherTempC,
-                    weatherCondition: weatherCondition
+                    weatherCondition: weatherCondition,
+                    weatherHumidity: weatherHumidity
                 )
             }
             return AIGenerationResult(payload: demo, source: .offlineDemo)
@@ -945,200 +950,206 @@ actor AIService {
         snapshot: AISnapshotContext
     ) -> AIMultiDayPlanResponse {
         let diningEnv = profile?.diningEnvironment ?? "居家做饭"
+        let dietPrefs = profile?.dietaryPreferences ?? []
         let tempC = Int(snapshot.weatherTempC.rounded())
+        let isWarmHumid = snapshot.weatherTempC >= 24.0 && snapshot.weatherHumidity >= 75.0
         let isAcute = snapshot.isAcuteRecovery
 
         let dayTemplates: [AIDayPlanPayload] = (0..<max(1, min(daysCount, 3))).map { offset in
+            let rawCards: [AIPlannedCardPayload]
+            let phase: String
+            let symptoms: [String]
+
             if isAcute {
-                let phase = "急性祛湿恢复期 (第\(offset + 1)/3天)"
+                phase = "急性祛湿恢复期 (第\(offset + 1)/3天)"
+                symptoms = snapshot.userReportedSymptoms
                 switch offset {
                 case 0:
-                    return AIDayPlanPayload(
-                        dayOffset: 0,
-                        recoveryPhase: phase,
-                        detectedSymptoms: snapshot.userReportedSymptoms,
-                        cards: [
-                            AIPlannedCardPayload(
-                                category: "diet",
-                                timeSlot: "上午 09:30",
-                                title: "炒薏米陈皮焦米温胃水",
-                                actionDetail: "炒薏米 15g + 5年陈皮 3g + 炒大米 10g 煮水 15 分钟温饮，忌空腹猛灌。",
-                                reasoning: "受寒兼脾胃运化弱，温中燥湿先护胃气。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "diet",
-                                timeSlot: "中午 12:00-13:30",
-                                title: "山药白扁豆小米暖胃粥",
-                                actionDetail: "\(diningEnv)优先选择软烂热食：怀山药 80g 煮小米粥，配清蒸鸡胸肉 100g。",
-                                reasoning: "急症第1天减少油腻生冷，减轻脾胃负担。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "fitness",
-                                timeSlot: "下午 17:00-17:30",
-                                title: "居家八段锦 + 靠墙静蹲(15min)",
-                                actionDetail: "暂停冷水游泳，练习八段锦两遍后做靠墙静蹲 3 组 × 45 秒。",
-                                reasoning: "恢复期防受凉耗气，用温和导引代替游泳。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "diet",
-                                timeSlot: "傍晚 18:00-18:45",
-                                title: "白萝卜陈皮瘦肉暖汤 + 蒸南瓜",
-                                actionDetail: "白萝卜丝 150g 配陈皮 1 片、瘦肉片 80g 煮清汤，佐少许蒸贝贝南瓜。",
-                                reasoning: "晚餐顺气消导且低脂温软，防止夜间食积停湿。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "lifestyle",
-                                timeSlot: "晚上 21:30",
-                                title: "40°C 温水泡脚 + 23:00 熄灯",
-                                actionDetail: "泡脚 15 分钟至微润即止，21:30 后仅小口抿水，保证 7.5 小时睡眠。",
-                                reasoning: "先补足睡眠节律，帮助湿浊夜间运化。"
-                            )
-                        ]
-                    )
+                    rawCards = [
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "上午 08:00-09:00",
+                            title: "温热小米粥配蒸蛋 + 餐后炒薏米焦米水",
+                            actionDetail: "先吃半碗温热小米粥配水煮蛋垫胃；餐后半小时温饮炒薏米 15g + 陈皮 3g + 炒大米煮水。",
+                            reasoning: "受寒脾胃弱忌空腹茶饮，先食温粥再温和化湿。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "中午 12:00-13:30",
+                            title: "山药白扁豆小米暖胃粥",
+                            actionDetail: "\(diningEnv)优先选择软烂热食：怀山药 80g 煮小米粥，配清蒸鸡胸肉 100g。",
+                            reasoning: "急症第1天减少油腻生冷，减轻脾胃负担。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "fitness",
+                            timeSlot: "下午 17:00-17:30",
+                            title: "居家八段锦 + 靠墙静蹲(15min)",
+                            actionDetail: "暂停冷水游泳，练习八段锦两遍后做靠墙静蹲 3 组 × 45 秒。",
+                            reasoning: "恢复期防受凉耗气，用温和导引代替游泳。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "傍晚 18:00-18:45",
+                            title: "白萝卜陈皮瘦肉暖汤 + 蒸南瓜",
+                            actionDetail: "白萝卜丝 150g 配陈皮 1 片、瘦肉片 80g 煮清汤，佐少许蒸贝贝南瓜。",
+                            reasoning: "晚餐顺气消导且低脂温软，防止夜间食积停湿。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "lifestyle",
+                            timeSlot: "晚上 21:30",
+                            title: "40°C 温水泡脚 + 23:00 熄灯",
+                            actionDetail: "泡脚 15 分钟至微润即止，21:30 后仅小口抿水，保证 7.5 小时睡眠。",
+                            reasoning: "先补足睡眠节律，帮助湿浊夜间运化。"
+                        )
+                    ]
                 case 1:
-                    return AIDayPlanPayload(
-                        dayOffset: 1,
-                        recoveryPhase: phase,
-                        detectedSymptoms: snapshot.userReportedSymptoms,
-                        cards: [
-                            AIPlannedCardPayload(
-                                category: "diet",
-                                timeSlot: "上午 09:30",
-                                title: "茯苓红枣温饮",
-                                actionDetail: "茯苓 6g、炒白术 5g、去核红枣 2 颗沸水焖泡温饮，提振脾气。",
-                                reasoning: "第2天肠胃渐稳，健脾益气缓解轻微气虚。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "diet",
-                                timeSlot: "中午 12:00-13:30",
-                                title: "清蒸鲈鱼 + 蒜蓉油麦菜 + 软米饭",
-                                actionDetail: "优质蛋白 160g 搭配温热时蔬与半碗软米饭，细嚼慢咽七分饱。",
-                                reasoning: "逐步恢复蛋白摄入，稳住减重期肌肉量。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "fitness",
-                                timeSlot: "下午 17:00-17:30",
-                                title: "居家弹力带微抗阻(20min)",
-                                actionDetail: "弹力带划船 3×15、臀桥 3×15、死虫式核心 3×12，保持呼吸平稳。",
-                                reasoning: "恢复期第2天用低冲击抗阻唤醒代谢。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "diet",
-                                timeSlot: "傍晚 18:00-19:00",
-                                title: "山药豆腐蒸滑蛋 + 焯生菜",
-                                actionDetail: "鸡蛋 2 个蒸滑蛋配嫩豆腐 100g、山药块与温热焯生菜，七分饱停筷。",
-                                reasoning: "第2天晚餐温润补蛋白，兼顾脾胃吸收与夜间控脂。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "lifestyle",
-                                timeSlot: "晚上 21:30",
-                                title: "顺时针揉腹 + 睡前 2 小时控水",
-                                actionDetail: "睡前仰卧轻柔揉腹 36 圈促进肠蠕动，夜间减少大量饮水。",
-                                reasoning: "痰湿体质防夜间水湿停滞引起晨起沉重。"
-                            )
-                        ]
-                    )
+                    rawCards = [
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "上午 08:00-09:00",
+                            title: "山药小米粥 + 餐后茯苓红枣温饮",
+                            actionDetail: "温热山药粥配水煮蛋 1 个；餐后温饮茯苓 6g、炒白术 5g、去核红枣 2 颗焖泡水。",
+                            reasoning: "第2天先食谷物固胃气，再健脾益气缓解乏力。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "中午 12:00-13:30",
+                            title: "清蒸鲈鱼 + 蒜蓉油麦菜 + 软米饭",
+                            actionDetail: "优质蛋白 160g 搭配温热时蔬与半碗软米饭，细嚼慢咽七分饱。",
+                            reasoning: "逐步恢复蛋白摄入，稳住减重期肌肉量。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "fitness",
+                            timeSlot: "下午 17:00-17:30",
+                            title: "居家弹力带微抗阻(20min)",
+                            actionDetail: "弹力带划船 3×15、臀桥 3×15、死虫式核心 3×12，保持呼吸平稳。",
+                            reasoning: "恢复期第2天用低冲击抗阻唤醒代谢。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "傍晚 18:00-19:00",
+                            title: "山药豆腐蒸滑蛋 + 焯生菜",
+                            actionDetail: "鸡蛋 2 个蒸滑蛋配嫩豆腐 100g、山药块与温热焯生菜，七分饱停筷。",
+                            reasoning: "第2天晚餐温润补蛋白，兼顾脾胃吸收与夜间控脂。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "lifestyle",
+                            timeSlot: "晚上 21:30",
+                            title: "顺时针揉腹 + 睡前 2 小时控水",
+                            actionDetail: "睡前仰卧轻柔揉腹 36 圈促进肠蠕动，夜间减少大量饮水。",
+                            reasoning: "痰湿体质防夜间水湿停滞引起晨起沉重。"
+                        )
+                    ]
                 default:
-                    return AIDayPlanPayload(
-                        dayOffset: 2,
-                        recoveryPhase: phase,
-                        detectedSymptoms: snapshot.userReportedSymptoms,
-                        cards: [
-                            AIPlannedCardPayload(
-                                category: "diet",
-                                timeSlot: "上午 09:30",
-                                title: "生姜陈皮温胃水",
-                                actionDetail: "恢复日常温阳化湿茶饮：老姜 2 片 + 陈皮 3g 温泡代茶。",
-                                reasoning: "第3天过渡回稳态，温和助阳化痰湿。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "diet",
-                                timeSlot: "中午 12:00-13:30",
-                                title: "冬瓜薏米瘦肉温汤 + 杂粮饭",
-                                actionDetail: "炒薏米 20g 配冬瓜瘦肉清汤与半碗糙米饭，少盐少油。",
-                                reasoning: "脾胃恢复后重启高蛋白低脂祛湿饮食。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "fitness",
-                                timeSlot: "下午 16:30-17:20",
-                                title: "温和室外游泳(限时30min)",
-                                actionDetail: "若\(snapshot.city)维持 \(tempC)°C 且无腹胀，可下水慢游 30 分钟并及时擦干。",
-                                reasoning: "结合 \(tempC)°C 天气与游泳偏好逐步恢复。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "diet",
-                                timeSlot: "傍晚 18:00-19:00",
-                                title: "姜丝丝瓜菌菇虾仁汤（轻食晚餐）",
-                                actionDetail: "虾仁 100g、鲜香菇、丝瓜加少许姜丝煮汤，配少许红薯或杂粮。",
-                                reasoning: "第3天晚餐清鲜高蛋白，助力游泳后修复不增湿。"
-                            ),
-                            AIPlannedCardPayload(
-                                category: "lifestyle",
-                                timeSlot: "晚上 21:30",
-                                title: "肩颈拉伸 + 23:00 前入睡",
-                                actionDetail: "睡前 10 分钟胸椎与肩颈伸展，远离屏幕准备入睡。",
-                                reasoning: "巩固 3 天恢复成果，防止再次熬夜伤脾。"
-                            )
-                        ]
-                    )
+                    rawCards = [
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "上午 08:00-09:00",
+                            title: "杂粮热粥配鸡蛋 + 餐后陈皮温胃饮",
+                            actionDetail: "温热燕麦小米粥配水煮蛋；餐后温饮\(isWarmHumid ? "陈皮 3g + 茯苓 5g 泡饮" : "老姜 2 片 + 陈皮 3g 泡饮")。",
+                            reasoning: "第3天过渡回稳态，结合\(tempC)°C体感平调脾胃。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "中午 12:00-13:30",
+                            title: "冬瓜薏米瘦肉温汤 + 杂粮饭",
+                            actionDetail: "炒薏米 20g 配冬瓜瘦肉清汤与半碗糙米饭，少盐少油。",
+                            reasoning: "脾胃恢复后重启高蛋白低脂祛湿饮食。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "fitness",
+                            timeSlot: "下午 16:30-17:20",
+                            title: "温和室外游泳(限时30min)",
+                            actionDetail: "若\(snapshot.city)维持 \(tempC)°C 且无腹胀，可下水慢游 30 分钟并及时擦干。",
+                            reasoning: "结合 \(tempC)°C 天气与游泳偏好逐步恢复。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "傍晚 18:00-19:00",
+                            title: "姜丝丝瓜菌菇虾仁汤（轻食晚餐）",
+                            actionDetail: "虾仁 100g、鲜香菇、丝瓜加少许姜丝煮汤，配少许红薯或杂粮。",
+                            reasoning: "第3天晚餐清鲜高蛋白，助力游泳后修复不增湿。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "lifestyle",
+                            timeSlot: "晚上 21:30",
+                            title: "肩颈拉伸 + 23:00 前入睡",
+                            actionDetail: "睡前 10 分钟胸椎与肩颈伸展，远离屏幕准备入睡。",
+                            reasoning: "巩固 3 天恢复成果，防止再次熬夜伤脾。"
+                        )
+                    ]
                 }
             } else {
-                let phase = "日常稳态调理期"
+                phase = "日常稳态调理期"
+                symptoms = []
                 let swimAllowed = LocalContextPlanner.isOutdoorSwimmingSuitable(
                     tempC: snapshot.weatherTempC,
                     condition: snapshot.weatherCondition,
                     windSpeedKmh: snapshot.weatherWindSpeedKmh,
                     isAcuteRecovery: false
                 )
-                return AIDayPlanPayload(
-                    dayOffset: offset,
-                    recoveryPhase: phase,
-                    detectedSymptoms: [],
-                    cards: [
-                        AIPlannedCardPayload(
-                            category: "diet",
-                            timeSlot: "上午 09:30",
-                            title: offset == 1 ? "陈皮荷叶祛湿轻饮" : "生姜陈皮温胃水",
-                            actionDetail: offset == 1
-                                ? "陈皮 3g + 干荷叶 2g 沸水冲泡温服，忌加糖或冰镇。"
-                                : "老姜 2 片 + 5 年陈皮 3g 焖泡 10 分钟温饮。",
-                            reasoning: "痰湿质兼轻微气虚，\(snapshot.solarTermName)温中化浊。"
-                        ),
-                        AIPlannedCardPayload(
-                            category: "diet",
-                            timeSlot: "中午 12:00-13:30",
-                            title: offset == 1 ? "清蒸鸡腿配茯苓山药时蔬" : "冬瓜薏米瘦肉温汤 + 杂粮饭",
-                            actionDetail: "\(diningEnv)场景控制精制碳水，优先温热瘦肉/鱼虾蛋白搭配清淡蔬菜。",
-                            reasoning: "稳态减重期高蛋白低脂，避免滋生痰湿。"
-                        ),
-                        AIPlannedCardPayload(
-                            category: "fitness",
-                            timeSlot: "下午 16:30-17:30",
-                            title: swimAllowed ? "阳光下室外游泳(\(30 + offset * 5)min)" : "居家哑铃/弹力带微抗阻(25min)",
-                            actionDetail: swimAllowed
-                                ? "中等配速蛙泳/自由泳，避开深潜，上岸及时披外套保暖。"
-                                : "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)，室内高脚杯深蹲 3×12、弹力带划船 3×15。",
-                            reasoning: swimAllowed
-                                ? "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)适宜下水，护膝燃脂。"
-                                : "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)，改室内抗阻防受寒。"
-                        ),
-                        AIPlannedCardPayload(
-                            category: "diet",
-                            timeSlot: "傍晚 18:00-19:00",
-                            title: offset == 1 ? "清炖鸡丝冬瓜汤 + 清炒菠菜" : "山药虾仁蒸蛋 + 蒜蓉油麦菜",
-                            actionDetail: "\(diningEnv)晚餐以优质蛋白配温热时蔬，减半主食并在 19:30 前吃完。",
-                            reasoning: "稳态减重期晚餐七分饱低碳水，夜间脾胃无负担。"
-                        ),
-                        AIPlannedCardPayload(
-                            category: "lifestyle",
-                            timeSlot: "晚上 21:30",
-                            title: offset == 2 ? "艾草温水泡脚 + 踝泵拉伸" : "温水泡脚 + 睡前 2 小时控水",
-                            actionDetail: "40°C 温水泡脚 15 分钟，睡前两小时避免大量饮水。",
-                            reasoning: "痰湿体质防夜间水湿停滞引发晨起浮肿。"
-                        )
-                    ]
-                )
+                let morningTeaTitle = isWarmHumid
+                    ? "温热小米粥配水煮蛋 + 餐后陈皮茯苓轻饮"
+                    : (offset == 1 ? "燕麦山药粥配水煮蛋 + 餐后陈皮荷叶饮" : "温热小米山药粥配水煮蛋 + 餐后生姜陈皮饮")
+                let morningTeaDetail = isWarmHumid
+                    ? "先吃温热小米粥与水煮蛋垫胃；餐后泡饮陈皮 3g + 茯苓 5g（\(snapshot.city)\(tempC)°C偏湿暖，不用纯姜）。"
+                    : (offset == 1
+                        ? "先吃温热燕麦粥配鸡蛋；餐后陈皮 3g + 干荷叶 2g 沸水冲泡温服，忌冰镇。"
+                        : "先吃温热小米山药粥配水煮蛋；餐后老姜 1 片 + 陈皮 3g 焖泡温饮。")
+
+                rawCards = [
+                    AIPlannedCardPayload(
+                        category: "diet",
+                        timeSlot: "上午 08:00-09:00",
+                        title: morningTeaTitle,
+                        actionDetail: morningTeaDetail,
+                        reasoning: isWarmHumid ? "当地\(tempC)°C偏湿暖，先养胃气再平调化湿。" : "先以温粥补谷气，再顺应\(tempC)°C气候调脾。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "diet",
+                        timeSlot: "中午 12:00-13:30",
+                        title: offset == 1 ? "清蒸鸡腿配茯苓山药时蔬" : "冬瓜薏米瘦肉温汤 + 杂粮饭",
+                        actionDetail: "\(diningEnv)场景控制精制碳水，优先温热瘦肉/鱼虾蛋白搭配清淡蔬菜。",
+                        reasoning: "稳态减重期高蛋白低脂，避免滋生痰湿。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "fitness",
+                        timeSlot: "下午 16:30-17:30",
+                        title: swimAllowed ? "阳光下室外游泳(\(30 + offset * 5)min)" : "居家哑铃/弹力带微抗阻(25min)",
+                        actionDetail: swimAllowed
+                            ? "中等配速蛙泳/自由泳，避开深潜，上岸及时披外套保暖。"
+                            : "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)，室内高脚杯深蹲 3×12、弹力带划船 3×15。",
+                        reasoning: swimAllowed
+                            ? "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)适宜下水，护膝燃脂。"
+                            : "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)，改室内抗阻防受寒。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "diet",
+                        timeSlot: "傍晚 18:00-19:00",
+                        title: offset == 1 ? "清炖鸡丝冬瓜汤 + 清炒菠菜" : "山药虾仁蒸蛋 + 蒜蓉油麦菜",
+                        actionDetail: "\(diningEnv)晚餐以优质蛋白配温热时蔬，减半主食并在 19:30 前吃完。",
+                        reasoning: "稳态减重期晚餐七分饱低碳水，夜间脾胃无负担。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "lifestyle",
+                        timeSlot: "晚上 21:30",
+                        title: offset == 2 ? "艾草温水泡脚 + 踝泵拉伸" : "温水泡脚 + 睡前 2 小时控水",
+                        actionDetail: "40°C 温水泡脚 15 分钟，睡前两小时避免大量饮水。",
+                        reasoning: "痰湿体质防夜间水湿停滞引发晨起浮肿。"
+                    )
+                ]
             }
+
+            let adaptedCards = rawCards.map {
+                DietaryAdaptationHelper.adaptPayload($0, diningEnvironment: diningEnv, dietaryPreferences: dietPrefs)
+            }
+
+            return AIDayPlanPayload(
+                dayOffset: offset,
+                recoveryPhase: phase,
+                detectedSymptoms: symptoms,
+                cards: adaptedCards
+            )
         }
 
         let phaseSpec: AIRegimenPhasePayload

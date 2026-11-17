@@ -6,6 +6,14 @@
 
 ## [Unreleased] - develop
 
+### Added (临床安全与生活化加固)
+- 新增 `RedFlagDetector` 与 `RedFlagWarningSheet`（支持 `#Preview`），并在 `AIStructuredModels`、`AIStructuredSchemas`、`AIPromptBuilder`、`TodayTimelineView` 与 `PhaseFollowUpSheet` 中接入 `redFlagWarning` 医疗红线熔断机制：命中黑便/便血、胸痛喘憋、剧烈腹痛/高热等高危信号时阻止推荐食疗或运动并建议线下就医（支持食物/铁剂染色误触二次确认）。
+- 新增 `DietaryAdaptationHelper`，统一在离线规划、复诊转段、建档与「换一换」中执行忌口食材替换（忌海鲜/素食/忌乳制品/忌牛羊肉/忌蛋/忌姜）及「外卖/食堂」真实可执行点餐方案改写（禁用需开火炖煮 40 分钟药膳汤）。
+
+### Changed (临床安全与生活化加固)
+- 升级早间第一张饮食卡片为「温热早餐 + 顺时饮（08:00-09:00）」，同步更新 `AIPromptBuilder`、`MockDataSeeder`、`AIService` 与 `LocalContextPlanner`，避免脾虚气虚用户空腹喝茶伤胃。
+- 升级 `SolarTermCalculator`（新增 `climateCalibratedGuidance`）、`DailyContextSnapshot`、`AIPromptBuilder`、`AIService` 与 `LocalContextPlanner`，明确南北方实时体感温湿度优先于传统节气规律（湿暖气候避免盲目推荐纯姜温燥）。
+
 ### Added (Phase 9 优先级 1：首次建档引导、4+2 问诊与标准化舌象)
 - 新增 `OnboardingFlowView` 四步首次使用建档流程（支持 `#Preview`）：基础体征与饮食/运动偏好（含「示例体验」入口）→ 四诊合参辨体质 → 环境定位与通知授权 → 初诊结果与首日方案生成。
 - 新增 `TongueCaptureSheet`（`AVFoundation` 自然白光自动白平衡拍摄引导 + `CoreImage` 照度质检 + 模拟器相册兜底），并在 `project.pbxproj` 补充 `NSCameraUsageDescription` 权限说明。

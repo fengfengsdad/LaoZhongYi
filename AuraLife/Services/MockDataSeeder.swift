@@ -88,10 +88,10 @@ enum MockDataSeeder {
             let cards = [
                 ActionCard(
                     category: .diet,
-                    timeSlot: "上午 09:30",
-                    title: "生姜陈皮温胃水",
-                    actionDetail: "老姜 2 片 + 5 年陈皮 3g，沸水焖泡 10 分钟温服，空腹或餐后半小时小口饮用。",
-                    reasoning: "痰湿兼轻微气虚，\(solar.name)温中理气开启脾胃运化。",
+                    timeSlot: "上午 08:00-09:00",
+                    title: "温热小米山药粥配水煮蛋 + 餐后生姜陈皮饮",
+                    actionDetail: "先吃 1 碗温热小米山药粥配水煮蛋 1 个护住胃气，餐后半小时温饮老姜 2 片 + 5 年陈皮 3g 焖泡水。",
+                    reasoning: "先垫温热谷物再温中化湿，避免空腹茶饮耗伤脾气。",
                     isCompleted: true,
                     sortOrder: 0,
                     snapshot: snapshot

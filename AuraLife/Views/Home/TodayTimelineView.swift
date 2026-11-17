@@ -27,6 +27,7 @@ struct TodayTimelineView: View {
 
     @State private var pendingProposal: AdjustmentProposal?
     @State private var pendingTriageSession: SymptomTriageSession?
+    @State private var pendingRedFlag: RedFlagAssessment?
     @State private var isSubmittingTriage: Bool = false
     @State private var isShowingProfile: Bool = false
     @State private var isShowingHistory: Bool = false
@@ -224,6 +225,28 @@ struct TodayTimelineView: View {
             Task {
                 await handleAttachedPhotoSelection(newItem)
             }
+        }
+        .sheet(item: $pendingRedFlag) { assessment in
+            RedFlagWarningSheet(
+                assessment: assessment,
+                onPauseAndLog: {
+                    let log = ChatAdjustmentLog(
+                        userInput: assessment.userInput,
+                        aiSummary: "[安全红线熔断] \(assessment.category.rawValue)：\(assessment.suggestedDepartment)",
+                        affectedCardTitles: [],
+                        wasApplied: true
+                    )
+                    modelContext.insert(log)
+                    try? modelContext.save()
+                    checkInText = ""
+                    showToast("已触发安全熔断并暂缓推荐，请优先线下就医")
+                },
+                onOverrideFalsePositive: {
+                    Task {
+                        await submitCheckIn(overrideInput: assessment.userInput, bypassRedFlag: true)
+                    }
+                }
+            )
         }
         .sheet(item: $pendingTriageSession) { session in
             SymptomTriageSheet(
@@ -487,12 +510,18 @@ struct TodayTimelineView: View {
 
     // MARK: - Phase 2 & 3 AI Actions
 
-    private func submitCheckIn(overrideInput: String? = nil) async {
+    private func submitCheckIn(overrideInput: String? = nil, bypassRedFlag: Bool = false) async {
         let snapshotsList = orderedSnapshots
         guard !snapshotsList.isEmpty else { return }
 
         let trimmed = (overrideInput ?? checkInText).trimmingCharacters(in: .whitespacesAndNewlines)
         let effectiveInput = trimmed.isEmpty && attachedImage != nil ? photoIntent.defaultPromptHint : trimmed
+
+        if !bypassRedFlag, let redFlag = RedFlagDetector.evaluate(input: effectiveInput) {
+            HapticFeedback.notify(.warning)
+            pendingRedFlag = redFlag
+            return
+        }
 
         isProcessingCheckIn = true
         streamingStatus = "正在唤醒动态规划引擎…"
@@ -511,6 +540,7 @@ struct TodayTimelineView: View {
         do {
             let result = try await AIService.shared.proposeContextualAdjustment(
                 userInput: effectiveInput,
+                bypassRedFlag: bypassRedFlag,
                 attachedImage: attachedSnapshot,
                 photoIntent: intentSnapshot,
                 recognizedPhotoText: ocrSnapshot,
@@ -536,6 +566,9 @@ struct TodayTimelineView: View {
             )
 
             switch outcome {
+            case let .redFlag(assessment):
+                HapticFeedback.notify(.warning)
+                pendingRedFlag = assessment
             case let .needsClarification(session):
                 pendingTriageSession = session
             case let .ready(proposal):
@@ -554,6 +587,13 @@ struct TodayTimelineView: View {
     ) async {
         let snapshotsList = orderedSnapshots
         guard !snapshotsList.isEmpty else { return }
+
+        if let redFlag = RedFlagDetector.evaluate(input: "\(originalInput) \(extraNote)") {
+            pendingTriageSession = nil
+            HapticFeedback.notify(.warning)
+            pendingRedFlag = redFlag
+            return
+        }
 
         isSubmittingTriage = true
         streamingStatus = "正在结合辨证结果生成调理方案…"
@@ -600,6 +640,9 @@ struct TodayTimelineView: View {
 
             pendingTriageSession = nil
             switch outcome {
+            case let .redFlag(assessment):
+                HapticFeedback.notify(.warning)
+                pendingRedFlag = assessment
             case let .ready(proposal):
                 pendingProposal = proposal
             case let .needsClarification(nextSession):

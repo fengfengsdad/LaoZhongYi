@@ -89,6 +89,7 @@ struct AICardDiffPayload: Codable, Sendable {
 struct AIAdjustmentResponse: Codable, Sendable {
     let resolutionStatus: String
     let clarificationReason: String
+    let redFlagAdvice: String
     let triageQuestions: [AITriageQuestionPayload]
     let proposedPhase: String
     let phaseSpec: AIRegimenPhasePayload
@@ -98,6 +99,10 @@ struct AIAdjustmentResponse: Codable, Sendable {
 
     var needsClarification: Bool {
         resolutionStatus == "needsClarification" && !triageQuestions.isEmpty
+    }
+
+    var isRedFlagWarning: Bool {
+        resolutionStatus == "redFlagWarning"
     }
 }
 

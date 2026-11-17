@@ -47,6 +47,7 @@ struct SymptomTriageSession: Identifiable, Sendable {
 }
 
 enum AdjustmentEvaluationOutcome: Sendable {
+    case redFlag(RedFlagAssessment)
     case needsClarification(SymptomTriageSession)
     case ready(AdjustmentProposal)
 }
@@ -71,6 +72,25 @@ enum LocalContextPlanner {
         source: AIServiceSource,
         snapshotsByOffset: [Int: DailyContextSnapshot]
     ) -> AdjustmentEvaluationOutcome {
+        if response.isRedFlagWarning {
+            let localFlag = RedFlagDetector.evaluate(input: userInput)
+            let assessment = RedFlagAssessment(
+                userInput: userInput,
+                category: localFlag?.category ?? .acuteAbdomenOrFever,
+                matchedKeywords: localFlag?.matchedKeywords ?? [],
+                headline: "AI 检测到潜在医疗红线信号，建议暂缓食疗并线下排查",
+                medicalGuidance: response.summary.isEmpty
+                    ? (localFlag?.medicalGuidance ?? "当前描述存在潜在器质性病变风险，请及时前往医院明确诊断。")
+                    : response.summary,
+                suggestedDepartment: response.redFlagAdvice.isEmpty
+                    ? (localFlag?.suggestedDepartment ?? "建议前往急诊或相应专科进行基础检查")
+                    : response.redFlagAdvice,
+                falsePositiveHint: localFlag?.falsePositiveHint ?? "若症状持续或加重，请第一时间线下就医。",
+                allowsOverrideAsMild: localFlag?.allowsOverrideAsMild ?? false
+            )
+            return .redFlag(assessment)
+        }
+
         if response.needsClarification && triageAnswers.isEmpty {
             let session = SymptomTriageSession(
                 userInput: userInput,
@@ -125,10 +145,12 @@ enum LocalContextPlanner {
         input: String,
         triageAnswers: [AITriageAnswer] = [],
         extraTriageNote: String? = nil,
+        bypassRedFlag: Bool = false,
         hasAttachedImage: Bool,
         photoIntent: PhotoCheckInIntent = .auto,
         recognizedPhotoText: String? = nil,
         diningEnvironment: String?,
+        dietaryPreferences: [String] = [],
         snapshot: AISnapshotContext
     ) -> AIAdjustmentResponse {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -143,12 +165,28 @@ enum LocalContextPlanner {
             nextStageHint: snapshot.activePhase?.nextStageHint ?? "持续顺时固本，随二十四节气微调"
         )
 
+        // 第零段：器质性红线熔断（除非用户已确认排除食物/药物染色）
+        if !bypassRedFlag, let redFlag = RedFlagDetector.evaluate(input: "\(effectiveInput) \(extraTriageNote ?? "")") {
+            return AIAdjustmentResponse(
+                resolutionStatus: "redFlagWarning",
+                clarificationReason: "",
+                redFlagAdvice: redFlag.suggestedDepartment,
+                triageQuestions: [],
+                proposedPhase: snapshot.recoveryPhase,
+                phaseSpec: defaultPhaseSpec,
+                detectedSymptoms: snapshot.userReportedSymptoms,
+                summary: redFlag.medicalGuidance,
+                diffs: []
+            )
+        }
+
         // 第一段：若输入存在模糊症状且尚未做过辨证追问，则先触发轻问诊选择题
         if triageAnswers.isEmpty && !hasAttachedImage {
             if let triage = detectAmbiguousSymptomTriage(for: effectiveInput) {
                 return AIAdjustmentResponse(
                     resolutionStatus: "needsClarification",
                     clarificationReason: triage.reason,
+                    redFlagAdvice: "",
                     triageQuestions: triage.questions,
                     proposedPhase: snapshot.recoveryPhase,
                     phaseSpec: defaultPhaseSpec,
@@ -194,28 +232,44 @@ enum LocalContextPlanner {
             )
 
             if let dietMorning = existingCards.first(where: { $0.category == .diet && $0.sortOrder == 0 }) {
+                let adapted = DietaryAdaptationHelper.adaptCard(
+                    title: "温热白粥配蒸豆腐 + 餐后冬瓜荷叶淡饮（去姜）",
+                    detail: "先吃半碗温热白粥配嫩豆腐或水煮蛋垫胃；餐后泡饮干荷叶 2g + 炒薏米 15g，暂撤生姜以免助热。",
+                    reasoning: "湿热偏盛先垫温粥保胃气，改用清利淡渗替换姜水。",
+                    timeSlot: "上午 08:00-09:00",
+                    diningEnvironment: diningEnvironment ?? "居家做饭",
+                    dietaryPreferences: dietaryPreferences
+                )
                 diffs.append(
                     AICardDiffPayload(
                         dayOffset: 0,
                         targetCardID: dietMorning.id.uuidString,
                         category: ActionCategory.diet.rawValue,
-                        timeSlot: dietMorning.timeSlot,
-                        updatedTitle: "冬瓜荷叶炒薏米淡饮（去姜）",
-                        updatedDetail: "干荷叶 2g + 炒薏米 15g + 淡竹叶 3g 煮水放至微温饮用，暂撤生姜以免助热。",
-                        updatedReasoning: "辨证属湿热偏盛，改用清利淡渗替换温燥姜水。",
+                        timeSlot: "上午 08:00-09:00",
+                        updatedTitle: adapted.title,
+                        updatedDetail: adapted.detail,
+                        updatedReasoning: adapted.reasoning
                     )
                 )
             }
             if let dietLunch = existingCards.first(where: { $0.category == .diet && $0.sortOrder == 1 }) {
+                let adapted = DietaryAdaptationHelper.adaptCard(
+                    title: "马齿苋/冬瓜清汤 + 白粥或杂粮",
+                    detail: "清淡蔬菜汤配易消化主食，少油少盐，忌油炸、海鲜与辛辣调味。",
+                    reasoning: "湿热积滞宜清疏导滞，避免肥甘厚腻加重黏滞。",
+                    timeSlot: dietLunch.timeSlot,
+                    diningEnvironment: diningEnvironment ?? "居家做饭",
+                    dietaryPreferences: dietaryPreferences
+                )
                 diffs.append(
                     AICardDiffPayload(
                         dayOffset: 0,
                         targetCardID: dietLunch.id.uuidString,
                         category: ActionCategory.diet.rawValue,
                         timeSlot: dietLunch.timeSlot,
-                        updatedTitle: "马齿苋/苦瓜清汤 + 白粥或杂粮",
-                        updatedDetail: "清淡蔬菜汤配易消化主食，少油少盐，忌油炸、海鲜与辛辣调味。",
-                        updatedReasoning: "湿热积滞宜清疏导滞，避免肥甘厚腻加重黏滞。",
+                        updatedTitle: adapted.title,
+                        updatedDetail: adapted.detail,
+                        updatedReasoning: adapted.reasoning
                     )
                 )
             }
@@ -236,6 +290,7 @@ enum LocalContextPlanner {
             return AIAdjustmentResponse(
                 resolutionStatus: "readyToAdjust",
                 clarificationReason: "",
+                redFlagAdvice: "",
                 triageQuestions: [],
                 proposedPhase: "\(dampHeatSpec.phaseName) (第1/3天)",
                 phaseSpec: dampHeatSpec,
@@ -252,6 +307,7 @@ enum LocalContextPlanner {
             photoIntent: photoIntent,
             recognizedPhotoText: recognizedPhotoText,
             diningEnvironment: diningEnvironment,
+            dietaryPreferences: dietaryPreferences,
             snapshot: snapshot
         )
 
@@ -284,6 +340,7 @@ enum LocalContextPlanner {
         return AIAdjustmentResponse(
             resolutionStatus: "readyToAdjust",
             clarificationReason: "",
+            redFlagAdvice: "",
             triageQuestions: [],
             proposedPhase: proposal.proposedPhase,
             phaseSpec: proposal.phaseSpec,
@@ -360,8 +417,10 @@ enum LocalContextPlanner {
         photoIntent: PhotoCheckInIntent = .auto,
         recognizedPhotoText: String? = nil,
         diningEnvironment: String?,
+        dietaryPreferences: [String] = [],
         snapshot: AISnapshotContext
     ) -> AdjustmentProposal {
+        let env = diningEnvironment ?? "居家做饭"
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let effectiveInput = trimmed.isEmpty && hasAttachedImage ? photoIntent.defaultPromptHint : trimmed
 
@@ -490,22 +549,38 @@ enum LocalContextPlanner {
             let phase = "\(acuteSpec.phaseName) (第1/3天)"
 
             if let dietMorning = existingCards.first(where: { $0.category == .diet && $0.sortOrder == 0 }) {
+                let adapted = DietaryAdaptationHelper.adaptCard(
+                    title: "温热小米粥配水煮蛋 + 餐后炒薏米焦米水",
+                    detail: "先吃半碗温热小米粥配水煮蛋垫胃；餐后温饮炒薏米 15g + 陈皮 3g + 炒大米煮水 15 分钟。",
+                    reasoning: "急症期先吃温粥护胃气，再温中燥湿避免空腹伤脾。",
+                    timeSlot: "上午 08:00-09:00",
+                    diningEnvironment: env,
+                    dietaryPreferences: dietaryPreferences
+                )
                 diffs.append(
                     CardAdjustmentDiff(
                         dayOffset: 0,
                         targetCardID: dietMorning.id,
                         category: .diet,
-                        timeSlot: dietMorning.timeSlot,
+                        timeSlot: "上午 08:00-09:00",
                         previousTitle: dietMorning.title,
-                        updatedTitle: "炒薏米陈皮焦米温胃水",
-                        updatedDetail: "炒薏米 15g + 陈皮 3g + 炒大米 10g 煮水 15 分钟温饮，先护脾胃再温和化湿。",
-                        updatedReasoning: "熬夜或受寒湿扰胃，优先温中燥湿护脾。",
+                        updatedTitle: adapted.title,
+                        updatedDetail: adapted.detail,
+                        updatedReasoning: adapted.reasoning,
                         sortOrder: 0
                     )
                 )
             }
 
             if let dietLunch = existingCards.first(where: { $0.category == .diet && $0.sortOrder == 1 }) {
+                let adapted = DietaryAdaptationHelper.adaptCard(
+                    title: "山药白扁豆小米暖胃粥",
+                    detail: "怀山药 80g、炒白扁豆 15g、小米煮至绵软，配清蒸鸡胸肉 100g，忌生冷油腻。",
+                    reasoning: "急症期暂停寒凉与粗硬纤维，减轻脾胃负担。",
+                    timeSlot: dietLunch.timeSlot,
+                    diningEnvironment: env,
+                    dietaryPreferences: dietaryPreferences
+                )
                 diffs.append(
                     CardAdjustmentDiff(
                         dayOffset: 0,
@@ -513,9 +588,9 @@ enum LocalContextPlanner {
                         category: .diet,
                         timeSlot: dietLunch.timeSlot,
                         previousTitle: dietLunch.title,
-                        updatedTitle: "山药白扁豆小米暖胃粥",
-                        updatedDetail: "怀山药 80g、炒白扁豆 15g、小米煮至绵软，配清蒸鸡胸肉 100g，忌生冷油腻。",
-                        updatedReasoning: "急症期暂停寒凉与粗硬纤维，减轻脾胃负担。",
+                        updatedTitle: adapted.title,
+                        updatedDetail: adapted.detail,
+                        updatedReasoning: adapted.reasoning,
                         sortOrder: 1
                     )
                 )
@@ -581,16 +656,24 @@ enum LocalContextPlanner {
             }
 
             if humidity >= 80, let dietMorning = existingCards.first(where: { $0.category == .diet && $0.sortOrder == 0 }) {
+                let adapted = DietaryAdaptationHelper.adaptCard(
+                    title: "温热小米粥配鸡蛋 + 餐后炒薏米茯苓祛湿茶",
+                    detail: "先吃温热小米粥配水煮蛋护脾胃；餐后泡饮炒薏米 15g、茯苓 6g、陈皮 3g，应对 \(humidity)% 高湿。",
+                    reasoning: "湿度 \(humidity)% 偏重，先垫谷气再加强健脾化湿。",
+                    timeSlot: "上午 08:00-09:00",
+                    diningEnvironment: env,
+                    dietaryPreferences: dietaryPreferences
+                )
                 diffs.append(
                     CardAdjustmentDiff(
                         dayOffset: 0,
                         targetCardID: dietMorning.id,
                         category: .diet,
-                        timeSlot: dietMorning.timeSlot,
+                        timeSlot: "上午 08:00-09:00",
                         previousTitle: dietMorning.title,
-                        updatedTitle: "炒薏米陈皮茯苓祛湿茶",
-                        updatedDetail: "炒薏米 15g、茯苓 6g、陈皮 3g 煮水代茶，今日湿度高达 \(humidity)% 更需健脾利湿。",
-                        updatedReasoning: "湿度 \(humidity)% 偏重，痰湿体质加强健脾化湿。",
+                        updatedTitle: adapted.title,
+                        updatedDetail: adapted.detail,
+                        updatedReasoning: adapted.reasoning,
                         sortOrder: 0
                     )
                 )
@@ -656,6 +739,15 @@ enum LocalContextPlanner {
             return cleaned.isEmpty ? nil : String(cleaned.prefix(24))
         }
         if let dietLunch = existingCards.first(where: { $0.category == .diet && $0.sortOrder == 1 }) {
+            let adapted = DietaryAdaptationHelper.adaptCard(
+                title: diningEnv == "外卖" ? "清汤鸡肉米粉（去冰少油）" : "茯苓山药蒸鸡腿配时蔬",
+                detail: "今日\(diningEnv)场景优先选温热易消化蛋白，七分饱停筷，餐后站立 15 分钟。"
+                    + (ocrSnippet.map { "（参考识别信息：\($0)）" } ?? ""),
+                reasoning: "结合「\(effectiveInput.prefix(8))」与\(Int(snapshot.weatherTempC.rounded()))°C体感微调。",
+                timeSlot: dietLunch.timeSlot,
+                diningEnvironment: diningEnv,
+                dietaryPreferences: dietaryPreferences
+            )
             diffs.append(
                 CardAdjustmentDiff(
                     dayOffset: 0,
@@ -663,10 +755,9 @@ enum LocalContextPlanner {
                     category: .diet,
                     timeSlot: dietLunch.timeSlot,
                     previousTitle: dietLunch.title,
-                    updatedTitle: diningEnv == "外卖" ? "清汤鸡肉米粉（去冰少油）" : "茯苓山药蒸鸡腿配时蔬",
-                    updatedDetail: "今日\(diningEnv)场景优先选温热易消化蛋白，七分饱停筷，餐后站立 15 分钟。"
-                        + (ocrSnippet.map { "（参考识别信息：\($0)）" } ?? ""),
-                    updatedReasoning: "结合「\(effectiveInput.prefix(8))」与\(snapshot.solarTermName)节气微调。",
+                    updatedTitle: adapted.title,
+                    updatedDetail: adapted.detail,
+                    updatedReasoning: adapted.reasoning,
                     sortOrder: dietLunch.sortOrder
                 )
             )
@@ -697,6 +788,7 @@ enum LocalContextPlanner {
             photoIntent: .auto,
             recognizedPhotoText: nil,
             diningEnvironment: profile?.diningEnvironment,
+            dietaryPreferences: profile?.dietaryPreferences ?? [],
             snapshot: AISnapshotContext(snapshot: snapshot)
         )
     }
@@ -708,7 +800,8 @@ enum LocalContextPlanner {
         weatherTempC: Double,
         weatherCondition: String,
         city: String,
-        diningEnvironment: String?
+        diningEnvironment: String?,
+        dietaryPreferences: [String] = []
     ) -> (title: String, detail: String, reasoning: String) {
         let isAcute = isAcuteRecovery
         let tempC = Int(weatherTempC.rounded())
@@ -723,9 +816,9 @@ enum LocalContextPlanner {
         case .diet:
             let pool: [(String, String, String)] = isAcute ? [
                 (
-                    "红枣生姜陈皮饮",
-                    "去核红枣 2 颗、生姜 2 片、陈皮 2g 煮沸焖泡，温热小口慢饮。",
-                    "急性恢复期暖胃散寒，兼顾轻微气虚提神。"
+                    "小米南瓜粥配蒸蛋 + 餐后红枣陈皮饮",
+                    "温热小米南瓜粥配水煮蛋先垫胃；餐后温饮去核红枣 2 颗 + 陈皮 2g 焖泡水。",
+                    "急性恢复期先食温粥护胃，兼顾轻微气虚提神。"
                 ),
                 (
                     "猴头菇山药温胃羹",
@@ -733,15 +826,15 @@ enum LocalContextPlanner {
                     "粘膜修复期温和养胃，避免加重痰湿停滞。"
                 ),
                 (
-                    "炒白术茯苓温茶",
-                    "茯苓 6g + 炒白术 5g 代茶饮，下午 4 点前温服完毕。",
+                    "炒白术茯苓温茶 + 蒸山药",
+                    "先吃两块蒸山药垫胃，再温饮茯苓 6g + 炒白术 5g 代茶，下午 4 点前饮毕。",
                     "健脾益气燥湿，缓解午后困倦与大便粘滞。"
                 )
             ] : [
                 (
-                    "陈皮荷叶祛湿轻饮",
-                    "老陈皮 3g + 干荷叶 2g 沸水冲泡，上午代茶饮用，忌冰镇。",
-                    "痰湿体质化浊醒脾，助力减重期代谢。"
+                    "燕麦小米粥配鸡蛋 + 餐后陈皮荷叶饮",
+                    "先吃温热燕麦小米粥配水煮蛋；餐后老陈皮 3g + 干荷叶 2g 沸水冲泡温服，忌冰镇。",
+                    "先养胃气再化浊醒脾，助力痰湿质减重代谢。"
                 ),
                 (
                     "清蒸鲈鱼 + 清炒芥兰",
@@ -755,7 +848,15 @@ enum LocalContextPlanner {
                 )
             ]
 
-            return nextCandidate(from: pool, excludingTitle: excludingTitle)
+            let chosen = nextCandidate(from: pool, excludingTitle: excludingTitle)
+            return DietaryAdaptationHelper.adaptCard(
+                title: chosen.0,
+                detail: chosen.1,
+                reasoning: chosen.2,
+                timeSlot: chosen.0.contains("粥") ? "上午 08:00-09:00" : "中午 12:00-13:30",
+                diningEnvironment: diningEnvironment ?? "居家做饭",
+                dietaryPreferences: dietaryPreferences
+            )
 
         case .fitness:
             let pool: [(String, String, String)] = !swimSuitable ? [
@@ -821,7 +922,9 @@ enum LocalContextPlanner {
     ) -> AIPhaseTransitionResponse {
         let currentStage = snapshot.activePhase?.stageKind ?? (snapshot.isAcuteRecovery ? .acuteRelief : .maintenance)
         let diningEnv = profile?.diningEnvironment ?? "居家做饭"
+        let dietPrefs = profile?.dietaryPreferences ?? []
         let tempC = Int(snapshot.weatherTempC.rounded())
+        let isWarmHumid = snapshot.weatherTempC >= 24.0 && snapshot.weatherHumidity >= 75.0
         let swimSuitable = isOutdoorSwimmingSuitable(
             tempC: snapshot.weatherTempC,
             condition: snapshot.weatherCondition,
@@ -829,6 +932,10 @@ enum LocalContextPlanner {
             isAcuteRecovery: false
         )
         let currentTags = profile?.constitutionTags ?? ["痰湿质78分", "轻微气虚", "肠胃敏感"]
+
+        func adapt(_ cards: [AIPlannedCardPayload]) -> [AIPlannedCardPayload] {
+            cards.map { DietaryAdaptationHelper.adaptPayload($0, diningEnvironment: diningEnv, dietaryPreferences: dietPrefs) }
+        }
 
         switch outcome {
         case .improved:
@@ -856,13 +963,13 @@ enum LocalContextPlanner {
                         toleranceNote: "对温胃茶饮与八段锦导引耐受良好"
                     ),
                     remainingSymptoms: [],
-                    cards: [
+                    cards: adapt([
                         AIPlannedCardPayload(
                             category: "diet",
-                            timeSlot: "上午 09:30",
-                            title: "炒白术茯苓陈皮温茶",
-                            actionDetail: "茯苓 6g、炒白术 5g、陈皮 3g 煮水焖泡 10 分钟温服，唤醒脾胃运化。",
-                            reasoning: "急症初愈重在健脾渗湿，防止残湿留滞。"
+                            timeSlot: "上午 08:00-09:00",
+                            title: "温热小米粥配蒸蛋 + 餐后炒白术茯苓茶",
+                            actionDetail: "先吃温热小米粥配水煮蛋垫胃；餐后泡饮茯苓 6g、炒白术 5g、陈皮 3g 温茶。",
+                            reasoning: "先垫谷气护胃，再健脾渗湿防止残湿留滞。"
                         ),
                         AIPlannedCardPayload(
                             category: "diet",
@@ -892,7 +999,7 @@ enum LocalContextPlanner {
                             actionDetail: "仰卧轻柔摩腹 36 圈，21:30 后仅抿口润喉，23:00 前熄灯。",
                             reasoning: "巩固脾胃夜运，减少晨起肢体沉重感。"
                         )
-                    ]
+                    ])
                 )
 
             case .tonifying:
@@ -916,13 +1023,13 @@ enum LocalContextPlanner {
                         toleranceNote: "清蒸蛋白与室内微抗阻适应良好"
                     ),
                     remainingSymptoms: [],
-                    cards: [
+                    cards: adapt([
                         AIPlannedCardPayload(
                             category: "diet",
-                            timeSlot: "上午 09:30",
-                            title: "黄芪红枣陈皮益气饮",
-                            actionDetail: "黄芪 5g、去核红枣 2 颗、陈皮 2g 沸水焖泡温饮，补气不腻滞。",
-                            reasoning: "扶正期兼顾轻微气虚，益气健脾防反复。"
+                            timeSlot: "上午 08:00-09:00",
+                            title: "山药燕麦粥配水煮蛋 + 餐后黄芪红枣陈皮饮",
+                            actionDetail: "先吃温热山药燕麦粥配水煮蛋 1 个；餐后温饮黄芪 5g、红枣 2 颗、陈皮 2g 焖泡水。",
+                            reasoning: "先食温粥补谷气，再益气健脾防湿反复。"
                         ),
                         AIPlannedCardPayload(
                             category: "diet",
@@ -956,7 +1063,7 @@ enum LocalContextPlanner {
                             actionDetail: "40°C 温水泡脚 12 分钟，放下屏幕保证 7.5 小时高质量睡眠。",
                             reasoning: "睡眠是最好的扶正之法，稳固脾肾阳气。"
                         )
-                    ]
+                    ])
                 )
 
             default:
@@ -980,13 +1087,15 @@ enum LocalContextPlanner {
                         toleranceNote: "完成整周期调理，脾胃耐受力较前提升"
                     ),
                     remainingSymptoms: [],
-                    cards: [
+                    cards: adapt([
                         AIPlannedCardPayload(
                             category: "diet",
-                            timeSlot: "上午 09:30",
-                            title: "生姜陈皮温胃水",
-                            actionDetail: "老姜 2 片 + 5 年陈皮 3g 焖泡 10 分钟温饮。",
-                            reasoning: "回归稳态，\(snapshot.solarTermName)温中理气开启运化。"
+                            timeSlot: "上午 08:00-09:00",
+                            title: isWarmHumid ? "温热小米粥配水煮蛋 + 餐后陈皮茯苓饮" : "温热小米山药粥配水煮蛋 + 餐后生姜陈皮饮",
+                            actionDetail: isWarmHumid
+                                ? "先吃温热小米粥与水煮蛋；餐后温饮陈皮 3g + 茯苓 5g 泡饮（\(snapshot.city)\(tempC)°C偏湿暖，改平调）。"
+                                : "先吃温热小米山药粥与水煮蛋；餐后老姜 2 片 + 5 年陈皮 3g 焖泡温饮。",
+                            reasoning: "先吃温粥养胃，再顺应\(snapshot.city)\(tempC)°C气候调脾。"
                         ),
                         AIPlannedCardPayload(
                             category: "diet",
@@ -1020,7 +1129,7 @@ enum LocalContextPlanner {
                             actionDetail: "40°C 泡脚 15 分钟至微润即止，夜间不大量饮水。",
                             reasoning: "防夜间水湿停滞，保持次日晨起轻盈。"
                         )
-                    ]
+                    ])
                 )
             }
 
@@ -1045,13 +1154,13 @@ enum LocalContextPlanner {
                     toleranceNote: "对温和食养方案有正向改善"
                 ),
                 remainingSymptoms: snapshot.userReportedSymptoms,
-                cards: [
+                cards: adapt([
                     AIPlannedCardPayload(
                         category: "diet",
-                        timeSlot: "上午 09:30",
-                        title: "红枣炒薏米陈皮温饮",
-                        actionDetail: "炒薏米 15g、陈皮 3g、去核红枣 2 颗煮水 15 分钟温服。",
-                        reasoning: "巩固期温和健脾燥湿，兼顾轻微气虚。"
+                        timeSlot: "上午 08:00-09:00",
+                        title: "小米南瓜粥配鸡蛋 + 餐后红枣炒薏米饮",
+                        actionDetail: "先吃温热小米南瓜粥配水煮蛋垫胃；餐后温饮炒薏米 15g、陈皮 3g、去核红枣 2 颗焖泡水。",
+                        reasoning: "巩固期先垫温粥再健脾燥湿，避免空腹伤脾。"
                     ),
                     AIPlannedCardPayload(
                         category: "diet",
@@ -1081,7 +1190,7 @@ enum LocalContextPlanner {
                         actionDetail: "温水泡脚 12 分钟后揉腹 36 圈，保证充足睡眠。",
                         reasoning: "睡眠修复加速残余症状退散。"
                     )
-                ]
+                ])
             )
 
         case .persistingOrWorse:
@@ -1113,13 +1222,13 @@ enum LocalContextPlanner {
                     toleranceNote: noteSnippet.isEmpty ? "当前阶段对肉类或负重较敏感，已简化食谱" : "反馈重点：\(String(noteSnippet.prefix(16)))"
                 ),
                 remainingSymptoms: updatedSymptoms,
-                cards: [
+                cards: adapt([
                     AIPlannedCardPayload(
                         category: "diet",
-                        timeSlot: "上午 09:30",
-                        title: "焦米陈皮护胃汤（温服）",
-                        actionDetail: "干锅炒香大米 15g 加陈皮 2g 煮汤，只喝温米汤，少量多次啜饮。",
-                        reasoning: "反复不适时以焦米汤收敛护膜，减轻消化压力。"
+                        timeSlot: "上午 08:00-09:00",
+                        title: "焦米陈皮护胃温粥",
+                        actionDetail: "温热软白米粥/焦米汤少量多次温服，暂不加粗粮与生冷配菜。",
+                        reasoning: "反复不适时以温粥焦米汤护胃膜，减轻负担。"
                     ),
                     AIPlannedCardPayload(
                         category: "diet",
@@ -1149,7 +1258,7 @@ enum LocalContextPlanner {
                         actionDetail: "热敷袋温敷中脘与肚脐 15 分钟，22:30 前入睡并留意次日体温与排便。",
                         reasoning: "温阳安中并密切观察转归，确保安全底线。"
                     )
-                ]
+                ])
             )
         }
     }
@@ -1242,7 +1351,8 @@ enum LocalContextPlanner {
         hasTongueImage: Bool,
         city: String,
         weatherTempC: Double,
-        weatherCondition: String
+        weatherCondition: String,
+        weatherHumidity: Double = 68.0
     ) -> AIOnboardingConstitutionResponse {
         let trimmedReport = reportText.trimmingCharacters(in: .whitespacesAndNewlines)
         let joinedAnswers = allAnswers.map(\.answer).joined(separator: " ")
@@ -1250,6 +1360,7 @@ enum LocalContextPlanner {
         let parsed = trimmedReport.isEmpty ? nil : ConstitutionReportParser.parse(text: trimmedReport)
         let bmi = heightCM > 0 ? weightKG / pow(heightCM / 100.0, 2) : 24.0
         let tempC = Int(weatherTempC.rounded())
+        let isWarmHumid = weatherTempC >= 24.0 && weatherHumidity >= 75.0
         let swimSuitable = isOutdoorSwimmingSuitable(
             tempC: weatherTempC,
             condition: weatherCondition,
@@ -1263,8 +1374,12 @@ enum LocalContextPlanner {
         var secondary: [String] = []
         var phaseName = "初筛试探校准期"
         var stageKind: RegimenStageKind = .dampnessClearing
-        var principle = "健脾燥湿、温和试探，忌生冷观察3日反应"
-        var morningDrink = ("生姜陈皮温和饮", "老姜 1 片 + 陈皮 3g 温泡 10 分钟，观察半小时后胃部暖感与口干情况。", "温中和胃并测试温热耐受度。")
+        var principle = isWarmHumid
+            ? "健脾平调化湿、顺应湿暖气候，忌生冷与过度温燥"
+            : "健脾燥湿、温和试探，忌生冷观察3日反应"
+        var morningDrink = isWarmHumid
+            ? ("温热小米粥配水煮蛋 + 餐后陈皮茯苓平调饮", "先吃温粥垫胃；餐后泡饮陈皮 3g + 茯苓 5g（\(city)\(tempC)°C偏湿暖，暂不加纯姜）。", "先养胃气再平调化湿，贴合当地湿暖体感。")
+            : ("温热小米山药粥配水煮蛋 + 餐后生姜陈皮饮", "先吃 1 碗温粥与鸡蛋护胃；餐后老姜 1 片 + 陈皮 3g 温泡 10 分钟。", "先食谷物保胃气，再温中和胃测耐受度。")
         var lunchMeal = ("冬瓜薏米瘦肉温汤 + 杂粮饭", "\(diningEnvironment)清淡少油，瘦肉/鱼虾 130g 配半碗温热杂粮饭。", "高蛋白低脂健脾，兼顾减重与化湿。")
 
         var dinnerMeal = ("山药虾仁蒸蛋 + 蒜蓉油麦菜（轻食晚餐）", "\(diningEnvironment)晚餐高蛋白低碳水，七分饱并在 19:30 前吃完。", "晚餐温软少主食，减轻夜间脾胃运化负担。")
@@ -1278,7 +1393,7 @@ enum LocalContextPlanner {
             phaseName = "引火归元试探期"
             stageKind = .tonifying
             principle = "清上温下、健运中焦，忌辛辣过燥与冰冷"
-            morningDrink = ("茯苓麦冬陈皮平调饮", "茯苓 6g + 麦冬 3g + 陈皮 2g 温泡代茶，既化中湿又防上火。", "平和调理上热下寒，避免纯姜燥热。")
+            morningDrink = ("小米百合粥配鸡蛋 + 餐后茯苓麦冬陈皮饮", "先吃温热小米百合粥配鸡蛋；餐后泡饮茯苓 6g + 麦冬 3g + 陈皮 2g。", "先垫谷气护中焦，平调上热下寒不燥。")
             lunchMeal = ("山药百合清炖鸡胸 + 绿叶时蔬", "\(diningEnvironment)温和清补，少辣少油，搭配半碗糙米饭。", "清润不过寒，护胃同时防口干长痘。")
             dinnerMeal = ("豆腐菌菇鸡蛋温汤 + 焯生菜（轻食晚餐）", "\(diningEnvironment)晚餐清润少油盐，少主食，不吃宵夜辛辣。", "晚餐清淡守中焦，防夜间虚火上炎。")
         } else if joinedAnswers.contains("口干口苦") || joinedAnswers.contains("偏怕热") || joinedAnswers.contains("偏热") || joinedAnswers.contains("易口干喉咙痛") || joinedAnswers.contains("干结") {
@@ -1287,7 +1402,7 @@ enum LocalContextPlanner {
             phaseName = "清化湿热校准期"
             stageKind = .dampnessClearing
             principle = "清利湿热、轻食通腑，忌辛辣姜桂温燥"
-            morningDrink = ("冬瓜荷叶炒薏米淡饮", "炒薏米 15g + 干荷叶 2g 煮水微温饮用，不加姜片。", "清化湿热并测试排便与口苦改善。")
+            morningDrink = ("温热燕麦杂粮粥配鸡蛋 + 餐后冬瓜荷叶淡饮", "先吃温热杂粮粥配鸡蛋；餐后泡饮炒薏米 15g + 干荷叶 2g（不加姜片）。", "先固胃气再清化湿热，观察口苦改善。")
             lunchMeal = ("清蒸鲈鱼 + 清炒时蔬 + 杂粮饭", "\(diningEnvironment)少油少辣，多吃冬瓜、芹菜等利湿清蔬。", "清淡高蛋白利湿，避免助热生痰。")
             dinnerMeal = ("冬瓜海带豆腐汤 + 凉拌/清炒苦菊（轻食晚餐）", "\(diningEnvironment)晚餐清热利湿、不吃烧烤与油腻荤菜。", "夜间清疏湿热，减少晨起口苦粘腻。")
         } else if joinedAnswers.contains("怕冷") || joinedAnswers.contains("稀水") {
@@ -1296,7 +1411,7 @@ enum LocalContextPlanner {
             phaseName = "温阳健脾试探期"
             stageKind = .tonifying
             principle = "温中散寒、健脾助阳，忌生冷果蔬冰饮"
-            morningDrink = ("生姜陈皮红枣温胃饮", "老姜 2 片 + 陈皮 3g + 去核红枣 2 颗沸水焖泡温服。", "温脾散寒，观察手脚回暖与肠胃舒适度。")
+            morningDrink = ("小米南瓜粥配水煮蛋 + 餐后生姜红枣温胃饮", "先吃热小米南瓜粥配鸡蛋；餐后温饮老姜 2 片 + 陈皮 3g + 去核红枣 2 颗。", "先吃温粥培土固胃，再温脾散寒。")
             lunchMeal = ("山药排骨/鸡腿温汤 + 软米饭", "\(diningEnvironment)保证食物温热，配山药、南瓜等健脾食材。", "培补脾阳，改善畏寒与吃凉腹泻。")
             dinnerMeal = ("姜丝白萝卜瘦肉暖汤 + 蒸南瓜（轻食晚餐）", "\(diningEnvironment)晚餐趁热小口吃，忌生冷沙拉与冷饮。", "温脾暖腹安睡，防夜间寒气侵胃。")
         } else {
@@ -1367,10 +1482,10 @@ enum LocalContextPlanner {
             )
         }
 
-        let cards = [
+        let rawCards = [
             AIPlannedCardPayload(
                 category: "diet",
-                timeSlot: "上午 09:30",
+                timeSlot: "上午 08:00-09:00",
                 title: morningDrink.0,
                 actionDetail: morningDrink.1,
                 reasoning: morningDrink.2
@@ -1398,6 +1513,14 @@ enum LocalContextPlanner {
                 reasoning: "稳住夜间脾运与睡眠节律，助前3天试探校准。"
             )
         ]
+
+        let cards = rawCards.map {
+            DietaryAdaptationHelper.adaptPayload(
+                $0,
+                diningEnvironment: diningEnvironment,
+                dietaryPreferences: dietaryPreferences
+            )
+        }
 
         let trialHint = needsTrial
             ? "前 3 天先以温和方案「以方测证」，第 2 天复诊后将自动提升置信度。"

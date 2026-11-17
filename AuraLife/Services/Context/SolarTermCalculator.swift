@@ -44,4 +44,23 @@ enum SolarTermCalculator {
         }
         return (current.name, current.guidance)
     }
+
+    /// 结合南北方城市实时体感温湿度修正节气提示（实时温湿度 > 节气传统规律）
+    static func climateCalibratedGuidance(
+        for date: Date,
+        tempC: Double,
+        humidity: Double
+    ) -> (name: String, guidance: String) {
+        let base = term(for: date)
+        if tempC >= 24.0 && humidity >= 75.0 {
+            return (base.name, "虽逢\(base.name)，但本地湿暖（\(Int(tempC.rounded()))°C/湿度\(Int(humidity.rounded()))%），宜平调健脾祛湿，忌过度温燥大补")
+        }
+        if tempC >= 26.0 && humidity < 75.0 {
+            return (base.name, "虽逢\(base.name)，但本地偏暖（\(Int(tempC.rounded()))°C），食养以清润平调为主，忌辛辣姜桂过燥")
+        }
+        if tempC <= 12.0 {
+            return (base.name, "当前\(base.name)叠加低温（\(Int(tempC.rounded()))°C），重在温热饮食护胃阳、室外避风防寒")
+        }
+        return base
+    }
 }

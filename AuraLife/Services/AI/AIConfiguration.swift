@@ -36,7 +36,7 @@ enum AIProvider: String, CaseIterable, Codable, Identifiable, Sendable {
         case .anthropicClaude:
             return "claude-sonnet-4-20250514"
         case .gemini:
-            return "gemini-2.5-flash"
+            return "gemini-3.5-flash-lite"
         }
     }
 

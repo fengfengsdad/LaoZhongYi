@@ -249,7 +249,7 @@ enum AIPromptBuilder {
         \(snapshotSection(snapshot))
 
         任务：请基于以上体质画像、当前分期治则、实时气象与节气上下文，生成未来 \(daysCount) 天（dayOffset 分别为 0...\(daysCount - 1)）的生活指令计划，并给出完整的 `phaseSpec`（分期、治法总则、转段标准与下一阶段）。
-        每天安排 4 张卡片，覆盖早间食养、午间正餐、下午导引/运动、晚间起居，所有卡片必须紧扣同一个治法总则。
+        每天安排 5 张卡片，必须完整覆盖：早间食养（09:00-09:30）、午间正餐（12:00-13:30）、下午导引/运动（16:30-17:30）、傍晚轻食晚餐（18:00-19:00）、睡前起居（21:30），所有卡片必须紧扣同一个治法总则。
         """
     }
 
@@ -354,9 +354,9 @@ enum AIPromptBuilder {
         - 用户补充说明：\(noteLine)
 
         任务：请严格依据中医「效不更方，变证易法」与转归规律进行复诊判断：
-        1. 若用户明显好转：按 `急症治标期(acuteRelief) -> 祛邪疏通期(dampnessClearing) -> 缓调扶正期(tonifying) -> 顺时固本期(maintenance)` 顺序推进至下一阶段，设置 `transitionDecision = "advanceToNextStage"`，更新 `newPhaseSpec`，清空已缓解症状，并生成紧扣新治则的今日 4 张卡片；同时在 `evolutionSpec` 中给出合理的体质演化评估（如偏颇分数微降 2～3 分或记录食材耐受良好）。
-        2. 若用户略有改善仍需巩固：设置 `transitionDecision = "extendCurrentStage"`，沿用当前阶段并微调更稳妥的过渡饮食与运动。
-        3. 若仍有不适或出现新变化：设置 `transitionDecision = "adjustPlan"`，结合补充说明重新立法与重排今日 4 张卡片，并在 `evolutionSpec.toleranceNote` 中记录诱因或不适反馈。
+        1. 若用户明显好转：按 `急症治标期(acuteRelief) -> 祛邪疏通期(dampnessClearing) -> 缓调扶正期(tonifying) -> 顺时固本期(maintenance)` 顺序推进至下一阶段，设置 `transitionDecision = "advanceToNextStage"`，更新 `newPhaseSpec`，清空已缓解症状，并生成紧扣新治则的今日 5 张卡片（早间食养、午间正餐、下午导引/运动、傍晚轻食晚餐、睡前起居）；同时在 `evolutionSpec` 中给出合理的体质演化评估（如偏颇分数微降 2～3 分或记录食材耐受良好）。
+        2. 若用户略有改善仍需巩固：设置 `transitionDecision = "extendCurrentStage"`，沿用当前阶段并微调更稳妥的过渡饮食与运动，输出完整今日 5 张卡片（含轻食晚餐）。
+        3. 若仍有不适或出现新变化：设置 `transitionDecision = "adjustPlan"`，结合补充说明重新立法与重排今日 5 张卡片（含清淡护胃晚餐），并在 `evolutionSpec.toleranceNote` 中记录诱因或不适反馈。
         """
     }
 
@@ -423,7 +423,7 @@ enum AIPromptBuilder {
         任务：
         1. 综合望诊（舌象）+ 问诊 + 地域气候给出 `primaryConstitution`（如“痰湿质74分”）与 `secondaryTags`，并诚实评估 `confidencePercent`（无报告无舌象一般在 65~75；有舌象或报告可达 80~90）。
         2. 若置信度 < 80 或有兼夹待确认项，设 `needsThreeDayTrial = true`，在 `suggestedPhaseSpec` 中制定 3 天「初筛试探校准期」（以温和中庸的方案以方测证，观察 2～3 天后复诊提准）。
-        3. 生成第 1 日的 4 张 `initialDayCards`（早饮、午膳、下午导引/运动、晚间起居），严禁触犯用户忌口与运动黑名单，每张 `reasoning` ≤ 30 字。
+        3. 生成第 1 日的 5 张 `initialDayCards`（早间食养、午间正餐、下午导引/运动、傍晚轻食晚餐、睡前起居），严禁触犯用户忌口与运动黑名单，每张 `reasoning` ≤ 30 字。
         """
     }
 }

@@ -879,6 +879,13 @@ enum LocalContextPlanner {
                             reasoning: "疏通期以室内低冲击抗阻唤醒代谢，暂不猛练。"
                         ),
                         AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "傍晚 18:00-19:00",
+                            title: "山药陈皮豆腐汤 + 清蒸鸡丝",
+                            actionDetail: "\(diningEnv)晚餐温软易消化，少油盐、少主食，19:00 前进食完毕。",
+                            reasoning: "疏通期晚餐轻食养脾，避免残湿夜间积滞。"
+                        ),
+                        AIPlannedCardPayload(
                             category: "lifestyle",
                             timeSlot: "晚上 21:30",
                             title: "顺时针揉腹 + 睡前 2 小时控水",
@@ -934,6 +941,13 @@ enum LocalContextPlanner {
                             reasoning: swimSuitable
                                 ? "\(snapshot.city) \(tempC)°C 晴暖适宜下水，重启有氧代谢。"
                                 : "结合气象条件在室内保肌减脂，不伤关节。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "傍晚 18:00-19:00",
+                            title: "清蒸鲜虾 + 蒜蓉芥兰 + 蒸南瓜",
+                            actionDetail: "\(diningEnv)晚餐优质蛋白 120g 配高纤绿叶菜与一小块贝贝南瓜，七分饱。",
+                            reasoning: "扶正期晚餐兼顾保肌与温脾，夜间轻负荷。"
                         ),
                         AIPlannedCardPayload(
                             category: "lifestyle",
@@ -993,6 +1007,13 @@ enum LocalContextPlanner {
                                 : "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)，室内抗阻更稳妥。"
                         ),
                         AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "傍晚 18:00-19:00",
+                            title: "山药虾仁蒸蛋 + 清炒时蔬（轻食晚餐）",
+                            actionDetail: "\(diningEnv)晚餐少油少盐，以蛋虾豆腐配绿叶菜为主，控制精制主食。",
+                            reasoning: "稳态减重期晚餐清淡高蛋白，防夜间生湿囤脂。"
+                        ),
+                        AIPlannedCardPayload(
                             category: "lifestyle",
                             timeSlot: "晚上 21:30",
                             title: "温水泡脚 + 睡前 2 小时控水",
@@ -1045,6 +1066,13 @@ enum LocalContextPlanner {
                         title: "八段锦 + 靠墙静蹲(15min)",
                         actionDetail: "八段锦两遍舒展脾胃，配合靠墙静蹲 3 组 × 45 秒。",
                         reasoning: "巩固阶段维持温和气血循环，防反复疲劳。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "diet",
+                        timeSlot: "傍晚 18:00-18:45",
+                        title: "南瓜小米瘦肉暖胃粥",
+                        actionDetail: "嫩瘦肉丝 60g 配贝贝南瓜与小米煮至软烂，少盐温食六七分饱。",
+                        reasoning: "巩固期晚餐继续温和护胃，不给脾胃添堵。"
                     ),
                     AIPlannedCardPayload(
                         category: "lifestyle",
@@ -1106,6 +1134,13 @@ enum LocalContextPlanner {
                         title: "腹式呼吸静养 + 轻缓散步(10min)",
                         actionDetail: "暂停抗阻与游泳，室内慢走 10 分钟配合深长腹式呼吸。",
                         reasoning: "不适期保留气血用于修复，避免运动耗气。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "diet",
+                        timeSlot: "傍晚 18:00-18:30",
+                        title: "温热白米汤 + 蒸山药泥（清简晚餐）",
+                        actionDetail: "少量温热软米粥配熟山药泥，不加油腻荤腥与生冷水果。",
+                        reasoning: "重整期晚餐极简留余地，让脾胃安稳过夜。"
                     ),
                     AIPlannedCardPayload(
                         category: "lifestyle",
@@ -1232,6 +1267,8 @@ enum LocalContextPlanner {
         var morningDrink = ("生姜陈皮温和饮", "老姜 1 片 + 陈皮 3g 温泡 10 分钟，观察半小时后胃部暖感与口干情况。", "温中和胃并测试温热耐受度。")
         var lunchMeal = ("冬瓜薏米瘦肉温汤 + 杂粮饭", "\(diningEnvironment)清淡少油，瘦肉/鱼虾 130g 配半碗温热杂粮饭。", "高蛋白低脂健脾，兼顾减重与化湿。")
 
+        var dinnerMeal = ("山药虾仁蒸蛋 + 蒜蓉油麦菜（轻食晚餐）", "\(diningEnvironment)晚餐高蛋白低碳水，七分饱并在 19:30 前吃完。", "晚餐温软少主食，减轻夜间脾胃运化负担。")
+
         if let parsed, !parsed.constitutionTags.isEmpty {
             primary = parsed.constitutionTags[0]
             secondary = Array(parsed.constitutionTags.dropFirst())
@@ -1243,6 +1280,7 @@ enum LocalContextPlanner {
             principle = "清上温下、健运中焦，忌辛辣过燥与冰冷"
             morningDrink = ("茯苓麦冬陈皮平调饮", "茯苓 6g + 麦冬 3g + 陈皮 2g 温泡代茶，既化中湿又防上火。", "平和调理上热下寒，避免纯姜燥热。")
             lunchMeal = ("山药百合清炖鸡胸 + 绿叶时蔬", "\(diningEnvironment)温和清补，少辣少油，搭配半碗糙米饭。", "清润不过寒，护胃同时防口干长痘。")
+            dinnerMeal = ("豆腐菌菇鸡蛋温汤 + 焯生菜（轻食晚餐）", "\(diningEnvironment)晚餐清润少油盐，少主食，不吃宵夜辛辣。", "晚餐清淡守中焦，防夜间虚火上炎。")
         } else if joinedAnswers.contains("口干口苦") || joinedAnswers.contains("偏怕热") || joinedAnswers.contains("偏热") || joinedAnswers.contains("易口干喉咙痛") || joinedAnswers.contains("干结") {
             primary = "湿热质73分"
             secondary = ["脾胃湿滞", "轻度内热"]
@@ -1251,6 +1289,7 @@ enum LocalContextPlanner {
             principle = "清利湿热、轻食通腑，忌辛辣姜桂温燥"
             morningDrink = ("冬瓜荷叶炒薏米淡饮", "炒薏米 15g + 干荷叶 2g 煮水微温饮用，不加姜片。", "清化湿热并测试排便与口苦改善。")
             lunchMeal = ("清蒸鲈鱼 + 清炒时蔬 + 杂粮饭", "\(diningEnvironment)少油少辣，多吃冬瓜、芹菜等利湿清蔬。", "清淡高蛋白利湿，避免助热生痰。")
+            dinnerMeal = ("冬瓜海带豆腐汤 + 凉拌/清炒苦菊（轻食晚餐）", "\(diningEnvironment)晚餐清热利湿、不吃烧烤与油腻荤菜。", "夜间清疏湿热，减少晨起口苦粘腻。")
         } else if joinedAnswers.contains("怕冷") || joinedAnswers.contains("稀水") {
             primary = "阳虚兼痰湿74分"
             secondary = ["脾胃偏寒", "轻微气虚"]
@@ -1259,6 +1298,7 @@ enum LocalContextPlanner {
             principle = "温中散寒、健脾助阳，忌生冷果蔬冰饮"
             morningDrink = ("生姜陈皮红枣温胃饮", "老姜 2 片 + 陈皮 3g + 去核红枣 2 颗沸水焖泡温服。", "温脾散寒，观察手脚回暖与肠胃舒适度。")
             lunchMeal = ("山药排骨/鸡腿温汤 + 软米饭", "\(diningEnvironment)保证食物温热，配山药、南瓜等健脾食材。", "培补脾阳，改善畏寒与吃凉腹泻。")
+            dinnerMeal = ("姜丝白萝卜瘦肉暖汤 + 蒸南瓜（轻食晚餐）", "\(diningEnvironment)晚餐趁热小口吃，忌生冷沙拉与冷饮。", "温脾暖腹安睡，防夜间寒气侵胃。")
         } else {
             if bmi >= 25.0 || joinedAnswers.contains("黏腻") || joinedAnswers.contains("粘腻") || joinedAnswers.contains("不成形") || joinedAnswers.contains("头重") {
                 primary = "痰湿质75分"
@@ -1343,6 +1383,13 @@ enum LocalContextPlanner {
                 reasoning: lunchMeal.2
             ),
             fitnessCard,
+            AIPlannedCardPayload(
+                category: "diet",
+                timeSlot: "傍晚 18:00-19:00",
+                title: dinnerMeal.0,
+                actionDetail: dinnerMeal.1,
+                reasoning: dinnerMeal.2
+            ),
             AIPlannedCardPayload(
                 category: "lifestyle",
                 timeSlot: "晚上 21:30",

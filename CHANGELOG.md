@@ -12,6 +12,7 @@
 - 在 `AIStructuredModels`、`AIStructuredSchemas`、`AIPromptBuilder`、`AIService` 与 `LocalContextPlanner` 中新增「4+2 自适应十问歌追问」（`auralife_onboarding_followup`）及「四诊合参初诊定方」（`auralife_onboarding_assessment`），支持上热下寒、寒湿、湿热等精细辨证与「置信度 + 3 天以方测证试探校准」。
 
 ### Changed (Phase 9 优先级 1)
+- 补全每日顺时生活卡片节奏，从 4 张升级为 5 张（早间食养、午间正餐、下午导引/运动、傍晚轻食晚餐、睡前起居），同步更新 `AIPromptBuilder`、`AIStructuredSchemas`、`MockDataSeeder`、`AIService` 与 `LocalContextPlanner`。
 - 优化 `OnboardingFlowView` 自适应问诊交互：第 1 题（寒热大方向）保持明确单选并消除 `/` 歧义，第 2～4 题（二便、口腔饮水、精力体感）拆分为独立症状胶囊多选（含「均无/正常」自动互斥），并在 `LocalContextPlanner` 中支持兼夹症状识别（如轻度气郁、肠胃敏感、轻微气虚）。
 - 新增 `FlowLayout` 自动换行流式标签布局，在 `OnboardingFlowView` 与 `ProfileSheetView` 中支持自然换行展示；同时在建档 Step 1 扩充常用饮食/运动预设并支持自由添加自定义忌口、运动限制及特殊说明。
 - 为 `UserConstitutionProfile` 新增 `constitutionConfidencePercent`、`assessmentMethod` 与 `needsCalibrationTrial` 字段；在 `TodayTimelineView` 复诊转段时自动根据反馈校准置信度。

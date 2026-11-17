@@ -322,8 +322,8 @@ enum AIStructuredSchemas {
                 "suggestedPhaseSpec": phaseSpecSchema,
                 "initialDayCards": [
                     "type": "array",
-                    "minItems": 3,
-                    "maxItems": 5,
+                    "minItems": 4,
+                    "maxItems": 6,
                     "items": plannedCardSchema
                 ],
                 "baselineDeltaSummary": [

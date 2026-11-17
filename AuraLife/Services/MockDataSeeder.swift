@@ -117,13 +117,23 @@ enum MockDataSeeder {
                     snapshot: snapshot
                 ),
                 ActionCard(
+                    category: .diet,
+                    timeSlot: "傍晚 18:00-19:00",
+                    title: "山药虾仁蒸蛋 + 蒜蓉油麦菜（轻食晚餐）",
+                    actionDetail: "嫩豆腐蒸蛋配虾仁 80g、铁棍山药几块与清炒绿叶菜，七分饱不加主食或仅少许蒸南瓜。",
+                    reasoning: "晚餐高蛋白低碳水且温热易化，减轻夜间脾胃积湿。",
+                    isCompleted: false,
+                    sortOrder: 3,
+                    snapshot: snapshot
+                ),
+                ActionCard(
                     category: .lifestyle,
                     timeSlot: "晚上 21:30",
                     title: "温水泡脚 + 睡前 2 小时控水",
                     actionDetail: "40°C 温水泡脚 15 分钟至微汗即止；21:30 后仅抿口润喉，不大量饮水。",
                     reasoning: "痰湿体质夜间水湿易停滞，防晨起浮肿沉重。",
                     isCompleted: false,
-                    sortOrder: 3,
+                    sortOrder: 4,
                     snapshot: snapshot
                 )
             ]

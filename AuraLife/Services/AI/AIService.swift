@@ -980,6 +980,13 @@ actor AIService {
                                 reasoning: "恢复期防受凉耗气，用温和导引代替游泳。"
                             ),
                             AIPlannedCardPayload(
+                                category: "diet",
+                                timeSlot: "傍晚 18:00-18:45",
+                                title: "白萝卜陈皮瘦肉暖汤 + 蒸南瓜",
+                                actionDetail: "白萝卜丝 150g 配陈皮 1 片、瘦肉片 80g 煮清汤，佐少许蒸贝贝南瓜。",
+                                reasoning: "晚餐顺气消导且低脂温软，防止夜间食积停湿。"
+                            ),
+                            AIPlannedCardPayload(
                                 category: "lifestyle",
                                 timeSlot: "晚上 21:30",
                                 title: "40°C 温水泡脚 + 23:00 熄灯",
@@ -1016,6 +1023,13 @@ actor AIService {
                                 reasoning: "恢复期第2天用低冲击抗阻唤醒代谢。"
                             ),
                             AIPlannedCardPayload(
+                                category: "diet",
+                                timeSlot: "傍晚 18:00-19:00",
+                                title: "山药豆腐蒸滑蛋 + 焯生菜",
+                                actionDetail: "鸡蛋 2 个蒸滑蛋配嫩豆腐 100g、山药块与温热焯生菜，七分饱停筷。",
+                                reasoning: "第2天晚餐温润补蛋白，兼顾脾胃吸收与夜间控脂。"
+                            ),
+                            AIPlannedCardPayload(
                                 category: "lifestyle",
                                 timeSlot: "晚上 21:30",
                                 title: "顺时针揉腹 + 睡前 2 小时控水",
@@ -1050,6 +1064,13 @@ actor AIService {
                                 title: "温和室外游泳(限时30min)",
                                 actionDetail: "若\(snapshot.city)维持 \(tempC)°C 且无腹胀，可下水慢游 30 分钟并及时擦干。",
                                 reasoning: "结合 \(tempC)°C 天气与游泳偏好逐步恢复。"
+                            ),
+                            AIPlannedCardPayload(
+                                category: "diet",
+                                timeSlot: "傍晚 18:00-19:00",
+                                title: "姜丝丝瓜菌菇虾仁汤（轻食晚餐）",
+                                actionDetail: "虾仁 100g、鲜香菇、丝瓜加少许姜丝煮汤，配少许红薯或杂粮。",
+                                reasoning: "第3天晚餐清鲜高蛋白，助力游泳后修复不增湿。"
                             ),
                             AIPlannedCardPayload(
                                 category: "lifestyle",
@@ -1100,6 +1121,13 @@ actor AIService {
                             reasoning: swimAllowed
                                 ? "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)适宜下水，护膝燃脂。"
                                 : "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)，改室内抗阻防受寒。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "傍晚 18:00-19:00",
+                            title: offset == 1 ? "清炖鸡丝冬瓜汤 + 清炒菠菜" : "山药虾仁蒸蛋 + 蒜蓉油麦菜",
+                            actionDetail: "\(diningEnv)晚餐以优质蛋白配温热时蔬，减半主食并在 19:30 前吃完。",
+                            reasoning: "稳态减重期晚餐七分饱低碳水，夜间脾胃无负担。"
                         ),
                         AIPlannedCardPayload(
                             category: "lifestyle",

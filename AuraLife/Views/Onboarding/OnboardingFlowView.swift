@@ -34,48 +34,64 @@ struct OnboardingFlowView: View {
     private struct BaseInquiryQuestion: Identifiable {
         let id: String
         let question: String
+        let allowsMultiple: Bool
+        let exclusiveOption: String?
         let options: [String]
     }
 
     private let baseQuestions: [BaseInquiryQuestion] = [
         BaseInquiryQuestion(
             id: "cold_heat_sweat",
-            question: "1. 平时更怕冷还是怕热、容易出汗吗？",
+            question: "1. 平时整体更偏怕冷还是怕热？",
+            allowsMultiple: false,
+            exclusiveOption: nil,
             options: [
-                "怕冷手脚凉 / 吹风易不适",
-                "怕热手心烦热 / 易口渴",
-                "怕冷又易上火（上热下寒）",
-                "寒热适中 / 不明显"
+                "整体偏怕冷（手脚凉或吹风易不适）",
+                "整体偏怕热（手心烦热或易出汗）",
+                "上面易上火，下面却怕冷",
+                "寒热适中 / 不太明显"
             ]
         ),
         BaseInquiryQuestion(
             id: "stool_urine",
-            question: "2. 日常大便与小便偏哪种表现？",
+            question: "2. 日常二便有哪些常见情况？",
+            allowsMultiple: true,
+            exclusiveOption: "成形规律（均无）",
             options: [
-                "大便偏黏腻挂壁 / 不成形",
-                "偏稀水样 / 吃凉易腹泻",
-                "偏干结难解 / 小便偏黄",
-                "成形规律 / 基本正常"
+                "大便黏腻挂壁",
+                "大便不成形",
+                "偏稀水样",
+                "吃凉易腹泻",
+                "大便干结难解",
+                "小便偏黄",
+                "成形规律（均无）"
             ]
         ),
         BaseInquiryQuestion(
             id: "mouth_drink",
-            question: "3. 晨起口腔感受与饮水偏好？",
+            question: "3. 晨起口腔与饮水有哪些偏好？",
+            allowsMultiple: true,
+            exclusiveOption: "清爽正常（均无）",
             options: [
-                "口淡粘腻 / 喜喝温热饮",
-                "口干口苦 / 偏爱凉水",
-                "口干咽燥 / 喝水不解渴",
-                "清爽正常 / 无明显偏好"
+                "晨起口淡粘腻",
+                "喜喝温热饮",
+                "口干口苦",
+                "偏爱凉水",
+                "口干咽燥不解渴",
+                "清爽正常（均无）"
             ]
         ),
         BaseInquiryQuestion(
             id: "energy_postmeal",
-            question: "4. 餐后或午后精力与体感？",
+            question: "4. 餐后或午后常有哪些感受？",
+            allowsMultiple: true,
+            exclusiveOption: "精力平稳（均无）",
             options: [
-                "头重犯困 / 饭后易胀气",
-                "易倦气短 / 说话懒言",
-                "烦躁易怒 / 胸胁微闷",
-                "精力平稳 / 无明显沉重"
+                "午后头重犯困",
+                "饭后容易胀气",
+                "易倦气短懒言",
+                "烦躁易怒或胸闷",
+                "精力平稳（均无）"
             ]
         )
     ]
@@ -107,7 +123,7 @@ struct OnboardingFlowView: View {
 
     // Step 2
     @State private var diagnosisMode: DiagnosisMode = .adaptiveInquiry
-    @State private var baseAnswers: [String: String] = [:]
+    @State private var baseAnswers: [String: [String]] = [:]
     @State private var followUpResponse: AIOnboardingFollowUpResponse?
     @State private var followUpAnswers: [String: String] = [:]
     @State private var isCheckingFollowUp: Bool = false
@@ -139,7 +155,7 @@ struct OnboardingFlowView: View {
     @State private var assessmentError: String?
 
     private var allBaseAnswered: Bool {
-        baseQuestions.allSatisfy { baseAnswers[$0.id] != nil }
+        baseQuestions.allSatisfy { !(baseAnswers[$0.id]?.isEmpty ?? true) }
     }
 
     private var allFollowUpAnswered: Bool {
@@ -438,18 +454,7 @@ struct OnboardingFlowView: View {
             if diagnosisMode == .adaptiveInquiry {
                 VStack(spacing: 12) {
                     ForEach(baseQuestions) { item in
-                        inquiryQuestionCard(
-                            question: item.question,
-                            options: item.options,
-                            selection: Binding(
-                                get: { baseAnswers[item.id] },
-                                set: { newValue in
-                                    baseAnswers[item.id] = newValue
-                                    followUpResponse = nil
-                                    followUpAnswers.removeAll()
-                                }
-                            )
-                        )
+                        baseInquiryQuestionCard(item)
                     }
                 }
 
@@ -490,6 +495,121 @@ struct OnboardingFlowView: View {
             }
 
             tongueCaptureCard
+        }
+    }
+
+    private func baseInquiryQuestionCard(_ item: BaseInquiryQuestion) -> some View {
+        let selectedItems = baseAnswers[item.id] ?? []
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center) {
+                Text(item.question)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AuraTheme.primaryText)
+
+                Spacer()
+
+                Text(item.allowsMultiple ? "可多选" : "单选")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(item.allowsMultiple ? AuraTheme.sageGreen : AuraTheme.inkSlate)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        (item.allowsMultiple ? AuraTheme.sageGreen : AuraTheme.inkSlate).opacity(0.12),
+                        in: Capsule()
+                    )
+            }
+
+            if item.allowsMultiple {
+                FlowLayout(spacing: 8, lineSpacing: 8) {
+                    ForEach(item.options, id: \.self) { option in
+                        let isSelected = selectedItems.contains(option)
+                        Button {
+                            toggleBaseMultiOption(option, for: item)
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                    .font(.caption)
+                                Text(option)
+                                    .font(.caption.weight(.medium))
+                            }
+                            .foregroundStyle(isSelected ? .white : AuraTheme.primaryText)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 8)
+                            .background(
+                                isSelected ? AuraTheme.sageGreen : AuraTheme.subtleSurface.opacity(0.85),
+                                in: Capsule()
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } else {
+                VStack(spacing: 7) {
+                    ForEach(item.options, id: \.self) { option in
+                        let isSelected = selectedItems.contains(option)
+                        Button {
+                            HapticFeedback.impact(.light)
+                            withAnimation(.easeInOut(duration: 0.16)) {
+                                baseAnswers[item.id] = [option]
+                                followUpResponse = nil
+                                followUpAnswers.removeAll()
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(isSelected ? AuraTheme.sageGreen : AuraTheme.secondaryText.opacity(0.5))
+                                Text(option)
+                                    .font(.subheadline)
+                                    .foregroundStyle(AuraTheme.primaryText)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .background(
+                                isSelected ? AuraTheme.sageGreen.opacity(0.12) : AuraTheme.subtleSurface.opacity(0.8),
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(isSelected ? AuraTheme.sageGreen.opacity(0.55) : Color.clear, lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(AuraTheme.cardSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AuraTheme.hairline, lineWidth: 1))
+    }
+
+    private func toggleBaseMultiOption(_ option: String, for item: BaseInquiryQuestion) {
+        HapticFeedback.impact(.light)
+        withAnimation(.easeInOut(duration: 0.16)) {
+            var current = baseAnswers[item.id] ?? []
+            if let exclusive = item.exclusiveOption {
+                if option == exclusive {
+                    current = current.contains(exclusive) ? [] : [exclusive]
+                } else {
+                    current.removeAll { $0 == exclusive }
+                    if current.contains(option) {
+                        current.removeAll { $0 == option }
+                    } else {
+                        current.append(option)
+                    }
+                }
+            } else {
+                if current.contains(option) {
+                    current.removeAll { $0 == option }
+                } else {
+                    current.append(option)
+                }
+            }
+            baseAnswers[item.id] = current
+            followUpResponse = nil
+            followUpAnswers.removeAll()
         }
     }
 
@@ -1040,8 +1160,12 @@ struct OnboardingFlowView: View {
 
     private func orderedBaseAnswers() -> [OnboardingInquiryAnswer] {
         baseQuestions.compactMap { q in
-            guard let ans = baseAnswers[q.id] else { return nil }
-            return OnboardingInquiryAnswer(id: q.id, question: q.question, answer: ans)
+            guard let selections = baseAnswers[q.id], !selections.isEmpty else { return nil }
+            return OnboardingInquiryAnswer(
+                id: q.id,
+                question: q.question,
+                answer: selections.joined(separator: "、")
+            )
         }
     }
 

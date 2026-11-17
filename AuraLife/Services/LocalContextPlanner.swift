@@ -1159,7 +1159,9 @@ enum LocalContextPlanner {
         let joined = baseAnswers.map(\.answer).joined(separator: " ")
         var questions: [AITriageQuestionPayload] = []
 
-        if joined.contains("上热下寒") || (joined.contains("怕冷") && (joined.contains("口干") || joined.contains("口苦") || joined.contains("烦躁"))) {
+        if joined.contains("上热下寒")
+            || joined.contains("下面却怕冷")
+            || (joined.contains("怕冷") && (joined.contains("口干") || joined.contains("口苦") || joined.contains("烦躁"))) {
             questions.append(
                 AITriageQuestionPayload(
                     id: "upper_heat_lower_cold",
@@ -1167,7 +1169,7 @@ enum LocalContextPlanner {
                     options: ["是，典型上火下凉", "不是，整体主要是怕冷", "主要偏热，下肢不凉"]
                 )
             )
-        } else if joined.contains("黏腻") || joined.contains("头重") || joined.contains("口淡") {
+        } else if joined.contains("黏腻") || joined.contains("粘腻") || joined.contains("头重") || joined.contains("胀气") || joined.contains("口淡") {
             questions.append(
                 AITriageQuestionPayload(
                     id: "dampness_nature",
@@ -1233,7 +1235,7 @@ enum LocalContextPlanner {
         if let parsed, !parsed.constitutionTags.isEmpty {
             primary = parsed.constitutionTags[0]
             secondary = Array(parsed.constitutionTags.dropFirst())
-        } else if joinedAnswers.contains("上火下凉") || joinedAnswers.contains("上热下寒") {
+        } else if joinedAnswers.contains("上火下凉") || joinedAnswers.contains("上热下寒") || joinedAnswers.contains("下面却怕冷") {
             primary = "寒热错杂质72分"
             secondary = ["脾胃气弱", "上热下寒"]
             phaseName = "引火归元试探期"
@@ -1241,7 +1243,7 @@ enum LocalContextPlanner {
             principle = "清上温下、健运中焦，忌辛辣过燥与冰冷"
             morningDrink = ("茯苓麦冬陈皮平调饮", "茯苓 6g + 麦冬 3g + 陈皮 2g 温泡代茶，既化中湿又防上火。", "平和调理上热下寒，避免纯姜燥热。")
             lunchMeal = ("山药百合清炖鸡胸 + 绿叶时蔬", "\(diningEnvironment)温和清补，少辣少油，搭配半碗糙米饭。", "清润不过寒，护胃同时防口干长痘。")
-        } else if joinedAnswers.contains("口干口苦") || joinedAnswers.contains("偏热") || joinedAnswers.contains("易口干喉咙痛") || joinedAnswers.contains("干结") {
+        } else if joinedAnswers.contains("口干口苦") || joinedAnswers.contains("偏怕热") || joinedAnswers.contains("偏热") || joinedAnswers.contains("易口干喉咙痛") || joinedAnswers.contains("干结") {
             primary = "湿热质73分"
             secondary = ["脾胃湿滞", "轻度内热"]
             phaseName = "清化湿热校准期"
@@ -1258,20 +1260,33 @@ enum LocalContextPlanner {
             morningDrink = ("生姜陈皮红枣温胃饮", "老姜 2 片 + 陈皮 3g + 去核红枣 2 颗沸水焖泡温服。", "温脾散寒，观察手脚回暖与肠胃舒适度。")
             lunchMeal = ("山药排骨/鸡腿温汤 + 软米饭", "\(diningEnvironment)保证食物温热，配山药、南瓜等健脾食材。", "培补脾阳，改善畏寒与吃凉腹泻。")
         } else {
-            if bmi >= 25.0 || joinedAnswers.contains("黏腻") || joinedAnswers.contains("头重") {
+            if bmi >= 25.0 || joinedAnswers.contains("黏腻") || joinedAnswers.contains("粘腻") || joinedAnswers.contains("不成形") || joinedAnswers.contains("头重") {
                 primary = "痰湿质75分"
             } else {
                 primary = "气虚偏湿质68分"
             }
-            if joinedAnswers.contains("气短") || joinedAnswers.contains("疲惫") {
+            if joinedAnswers.contains("气短") || joinedAnswers.contains("疲惫") || joinedAnswers.contains("易倦") {
                 secondary.append("轻微气虚")
             }
             if joinedAnswers.contains("吃凉") || joinedAnswers.contains("胀气") {
                 secondary.append("肠胃敏感")
             }
+            if joinedAnswers.contains("烦躁") || joinedAnswers.contains("胸闷") {
+                secondary.append("轻度气郁")
+            }
             if secondary.isEmpty {
                 secondary = ["脾运偏弱"]
             }
+        }
+
+        if (joinedAnswers.contains("烦躁") || joinedAnswers.contains("胸闷")) && !secondary.contains("轻度气郁") {
+            secondary.append("轻度气郁")
+        }
+        if (joinedAnswers.contains("吃凉") || joinedAnswers.contains("胀气")) && !secondary.contains("肠胃敏感") {
+            secondary.append("肠胃敏感")
+        }
+        if (joinedAnswers.contains("气短") || joinedAnswers.contains("易倦")) && !secondary.contains("轻微气虚") {
+            secondary.append("轻微气虚")
         }
 
         // 计算置信度：基础 66%，+ 报告 18%，+ 舌象 14%，+ 深度追问 6%

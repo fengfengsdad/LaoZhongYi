@@ -6,6 +6,20 @@
 
 ## [Unreleased] - develop
 
+### Added (Phase 9 优先级 1：首次建档引导、4+2 问诊与标准化舌象)
+- 新增 `OnboardingFlowView` 四步首次使用建档流程（支持 `#Preview`）：基础体征与饮食/运动偏好（含「示例体验」入口）→ 四诊合参辨体质 → 环境定位与通知授权 → 初诊结果与首日方案生成。
+- 新增 `TongueCaptureSheet`（`AVFoundation` 自然白光自动白平衡拍摄引导 + `CoreImage` 照度质检 + 模拟器相册兜底），并在 `project.pbxproj` 补充 `NSCameraUsageDescription` 权限说明。
+- 在 `AIStructuredModels`、`AIStructuredSchemas`、`AIPromptBuilder`、`AIService` 与 `LocalContextPlanner` 中新增「4+2 自适应十问歌追问」（`auralife_onboarding_followup`）及「四诊合参初诊定方」（`auralife_onboarding_assessment`），支持上热下寒、寒湿、湿热等精细辨证与「置信度 + 3 天以方测证试探校准」。
+
+### Changed (Phase 9 优先级 1)
+- 为 `UserConstitutionProfile` 新增 `constitutionConfidencePercent`、`assessmentMethod` 与 `needsCalibrationTrial` 字段；在 `TodayTimelineView` 复诊转段时自动根据反馈校准置信度。
+- 升级 `ContentView` 自动区分新用户建档与存量用户平滑进入；在 `ProfileSheetView` 展示置信度与「重新运行首次四诊合参建档引导」入口。
+- 更新 `.cursor/rules/auralife.mdc`，补充 Phase 9（含优先级 1～3）完整规划。
+
+### Planned (Phase 9 后续优先级)
+- **Phase 9 优先级 2**：扩展 `HealthKitSyncService` 读取近 14 天静息心率、HRV、睡眠规律与经期趋势，交叉验证寒热虚实。
+- **Phase 9 优先级 3**：接入 Apple `Speech` 框架实现语音口述问诊与状态打卡。
+
 ### Added (Phase 8：体质画像动态演化与个人医案档案)
 - 新增 `ConstitutionEvolutionRecord` SwiftData 模型，按周期沉淀证型评估、治法总则、主体质分值趋势、演化总结与耐受反馈；在 `UserConstitutionProfile` 中新增 `toleranceNotes` 持久化字段并在 `MockDataSeeder` 注入初始建档基线。
 - 在 `AIStructuredModels`、`AIStructuredSchemas` 与 `LocalContextPlanner` 中为复诊转段新增 `evolutionSpec`（`AIConstitutionEvolutionPayload`），支持好转转段时自动温和更新体质标签与评分。

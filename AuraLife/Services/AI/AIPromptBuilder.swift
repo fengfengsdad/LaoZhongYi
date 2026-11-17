@@ -9,6 +9,8 @@ struct AIProfileContext: Sendable {
     let dietaryPreferences: [String]
     let fitnessPreferences: [String]
     let toleranceNotes: [String]
+    let constitutionConfidencePercent: Int
+    let needsCalibrationTrial: Bool
     let diningEnvironment: String
 
     @MainActor
@@ -21,6 +23,8 @@ struct AIProfileContext: Sendable {
         self.dietaryPreferences = profile.dietaryPreferences
         self.fitnessPreferences = profile.fitnessPreferences
         self.toleranceNotes = profile.toleranceNotes
+        self.constitutionConfidencePercent = profile.constitutionConfidencePercent
+        self.needsCalibrationTrial = profile.needsCalibrationTrial
         self.diningEnvironment = profile.diningEnvironment
     }
 }
@@ -180,10 +184,12 @@ enum AIPromptBuilder {
         let fitness = profile.fitnessPreferences.isEmpty ? "暂无" : profile.fitnessPreferences.joined(separator: "、")
         let tolerance = profile.toleranceNotes.isEmpty ? "暂无记录" : profile.toleranceNotes.joined(separator: "；")
 
+        let calibrationNote = profile.needsCalibrationTrial ? "（当前处于前3天以方测证试探校准期，置信度 \(profile.constitutionConfidencePercent)%）" : "（置信度 \(profile.constitutionConfidencePercent)%）"
+
         return """
         用户长期体质画像：
         - 基础体征：身高 \(String(format: "%.1f", profile.heightCM))cm，当前体重 \(String(format: "%.1f", profile.weightKG))kg，目标体重 \(String(format: "%.1f", profile.targetWeightKG))kg（BMI \(String(format: "%.1f", profile.bmi))）
-        - 体质标签：\(tags)
+        - 体质标签：\(tags)\(calibrationNote)
         - 饮食偏好与忌口：\(diet)
         - 运动偏好与限制：\(fitness)
         - 既往调理耐受反馈：\(tolerance)
@@ -351,6 +357,73 @@ enum AIPromptBuilder {
         1. 若用户明显好转：按 `急症治标期(acuteRelief) -> 祛邪疏通期(dampnessClearing) -> 缓调扶正期(tonifying) -> 顺时固本期(maintenance)` 顺序推进至下一阶段，设置 `transitionDecision = "advanceToNextStage"`，更新 `newPhaseSpec`，清空已缓解症状，并生成紧扣新治则的今日 4 张卡片；同时在 `evolutionSpec` 中给出合理的体质演化评估（如偏颇分数微降 2～3 分或记录食材耐受良好）。
         2. 若用户略有改善仍需巩固：设置 `transitionDecision = "extendCurrentStage"`，沿用当前阶段并微调更稳妥的过渡饮食与运动。
         3. 若仍有不适或出现新变化：设置 `transitionDecision = "adjustPlan"`，结合补充说明重新立法与重排今日 4 张卡片，并在 `evolutionSpec.toleranceNote` 中记录诱因或不适反馈。
+        """
+    }
+
+    static func onboardingFollowUpPrompt(
+        heightCM: Double,
+        weightKG: Double,
+        targetWeightKG: Double,
+        baseAnswers: [OnboardingInquiryAnswer],
+        reportText: String,
+        hasTongueImage: Bool,
+        city: String,
+        weatherTempC: Double,
+        weatherCondition: String
+    ) -> String {
+        let answersText = baseAnswers.map { "  - \($0.question) → \($0.answer)" }.joined(separator: "\n")
+        let trimmedReport = reportText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return """
+        首次建档自适应十问歌排查：
+        - 基础体征：身高 \(String(format: "%.1f", heightCM))cm，体重 \(String(format: "%.1f", weightKG))kg，目标 \(String(format: "%.1f", targetWeightKG))kg
+        - 所在环境：\(city) \(Int(weatherTempC.rounded()))°C \(weatherCondition)
+        - 是否附带自然光舌象照片：\(hasTongueImage ? "是" : "否")
+        - 第三方报告文本：\(trimmedReport.isEmpty ? "无" : trimmedReport)
+        - 第一层基础四诊回答：
+        \(answersText.isEmpty ? "  （未作答）" : answersText)
+
+        任务：请判断以上信息是否存在「寒热交错（如上热下寒）」、「虚实兼夹」或「外湿 vs 内湿」不明确的情况。
+        - 若需要进一步精准辨证（尤其是无报告且无舌象时），设 `needFollowUp = true` 并给出 1~2 道高区分度的单选追问（例如排除熬夜虚火、寒热真假或温燥食材耐受）。
+        - 若信息已经非常充分，设 `needFollowUp = false`，`questions = []`。
+        """
+    }
+
+    static func onboardingAssessmentPrompt(
+        heightCM: Double,
+        weightKG: Double,
+        targetWeightKG: Double,
+        diningEnvironment: String,
+        dietaryPreferences: [String],
+        fitnessPreferences: [String],
+        allAnswers: [OnboardingInquiryAnswer],
+        reportText: String,
+        hasTongueImage: Bool,
+        city: String,
+        weatherTempC: Double,
+        weatherCondition: String,
+        weatherHumidity: Double
+    ) -> String {
+        let answersText = allAnswers.map { "  - \($0.question) → \($0.answer)" }.joined(separator: "\n")
+        let trimmedReport = reportText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let solar = SolarTermCalculator.term(for: .now)
+
+        return """
+        首次建档 · 四诊合参综合辨证与第 1 份顺时方案生成：
+        - 基础体征：身高 \(String(format: "%.1f", heightCM))cm，当前体重 \(String(format: "%.1f", weightKG))kg，目标 \(String(format: "%.1f", targetWeightKG))kg
+        - 就餐场景：\(diningEnvironment)
+        - 饮食忌口/偏好：\(dietaryPreferences.isEmpty ? "无特殊" : dietaryPreferences.joined(separator: "、"))
+        - 运动偏好/限制：\(fitnessPreferences.isEmpty ? "无特殊" : fitnessPreferences.joined(separator: "、"))
+        - 实时环境与节气：\(city) \(Int(weatherTempC.rounded()))°C \(weatherCondition) 湿度\(Int(weatherHumidity.rounded()))% · 节气 \(solar.name)（\(solar.guidance)）
+        - 第三方报告文本：\(trimmedReport.isEmpty ? "无" : trimmedReport)
+        - 多模态舌象照片：\(hasTongueImage ? "已附舌象照片，请仔细辨识舌质颜色、舌形齿痕与舌苔厚薄润燥，并将其作为核心依据之一。" : "未上传舌象照片")
+        - 自适应问诊问答：
+        \(answersText.isEmpty ? "  （未作答）" : answersText)
+
+        任务：
+        1. 综合望诊（舌象）+ 问诊 + 地域气候给出 `primaryConstitution`（如“痰湿质74分”）与 `secondaryTags`，并诚实评估 `confidencePercent`（无报告无舌象一般在 65~75；有舌象或报告可达 80~90）。
+        2. 若置信度 < 80 或有兼夹待确认项，设 `needsThreeDayTrial = true`，在 `suggestedPhaseSpec` 中制定 3 天「初筛试探校准期」（以温和中庸的方案以方测证，观察 2～3 天后复诊提准）。
+        3. 生成第 1 日的 4 张 `initialDayCards`（早饮、午膳、下午导引/运动、晚间起居），严禁触犯用户忌口与运动黑名单，每张 `reasoning` ≤ 30 字。
         """
     }
 }

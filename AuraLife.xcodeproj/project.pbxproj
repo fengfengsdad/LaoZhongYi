@@ -180,6 +180,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = AuraLife;
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于自然光引导拍摄舌象或餐食照片，辅助中医辨证与饮食微调";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取今日步数、昨晚睡眠时长与体重变化，动态调整生活与减重规划";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "用于获取当前城市气温、湿度与天气，动态调整户外运动与饮食建议";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于选择舌象、餐食或第三方体质报告截图";
@@ -214,6 +215,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = AuraLife;
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于自然光引导拍摄舌象或餐食照片，辅助中医辨证与饮食微调";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取今日步数、昨晚睡眠时长与体重变化，动态调整生活与减重规划";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "用于获取当前城市气温、湿度与天气，动态调整户外运动与饮食建议";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于选择舌象、餐食或第三方体质报告截图";

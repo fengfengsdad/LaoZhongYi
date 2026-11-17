@@ -1140,4 +1140,228 @@ enum LocalContextPlanner {
 
         return (updated, summary)
     }
+
+    // MARK: - Phase 9: Adaptive 4+2 Onboarding Inquiry
+
+    static func offlineOnboardingFollowUp(
+        baseAnswers: [OnboardingInquiryAnswer],
+        reportText: String,
+        hasTongueImage: Bool
+    ) -> AIOnboardingFollowUpResponse {
+        if !reportText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasTongueImage {
+            return AIOnboardingFollowUpResponse(
+                needFollowUp: false,
+                reasoningHint: "已结合体检/体质报告与自然光舌象照片，信息充分，可直接进入综合辨证。",
+                questions: []
+            )
+        }
+
+        let joined = baseAnswers.map(\.answer).joined(separator: " ")
+        var questions: [AITriageQuestionPayload] = []
+
+        if joined.contains("上热下寒") || (joined.contains("怕冷") && (joined.contains("口干") || joined.contains("口苦") || joined.contains("烦躁"))) {
+            questions.append(
+                AITriageQuestionPayload(
+                    id: "upper_heat_lower_cold",
+                    question: "是否经常熬夜或吃温热食物后容易口腔溃疡/长痘，但下肢和腹部依然怕凉？",
+                    options: ["是，典型上火下凉", "不是，整体主要是怕冷", "主要偏热，下肢不凉"]
+                )
+            )
+        } else if joined.contains("黏腻") || joined.contains("头重") || joined.contains("口淡") {
+            questions.append(
+                AITriageQuestionPayload(
+                    id: "dampness_nature",
+                    question: "平时喝生姜红糖水或吃微辣温补食物后，身体感受更接近哪种？",
+                    options: ["胃里暖和舒服、更有精神", "容易口干喉咙痛或长痘", "感觉偏腻、消化变慢"]
+                )
+            )
+        }
+
+        questions.append(
+            AITriageQuestionPayload(
+                id: "sleep_stamina_depth",
+                question: "近两周早上醒来和夜间睡眠的规律更偏向？",
+                options: ["常熬夜(>23:30)，醒后仍疲惫", "入睡尚可但多梦易醒", "作息规律，睡醒后较轻快"]
+            )
+        )
+
+        let limited = Array(questions.prefix(2))
+        return AIOnboardingFollowUpResponse(
+            needFollowUp: !limited.isEmpty,
+            reasoningHint: "为排除「寒热交错」与「温补耐受差异」，请再确认 \(limited.count) 个关键辨证问题：",
+            questions: limited
+        )
+    }
+
+    static func offlineOnboardingAssessment(
+        heightCM: Double,
+        weightKG: Double,
+        targetWeightKG: Double,
+        diningEnvironment: String,
+        dietaryPreferences: [String],
+        fitnessPreferences: [String],
+        allAnswers: [OnboardingInquiryAnswer],
+        reportText: String,
+        hasTongueImage: Bool,
+        city: String,
+        weatherTempC: Double,
+        weatherCondition: String
+    ) -> AIOnboardingConstitutionResponse {
+        let trimmedReport = reportText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let joinedAnswers = allAnswers.map(\.answer).joined(separator: " ")
+
+        let parsed = trimmedReport.isEmpty ? nil : ConstitutionReportParser.parse(text: trimmedReport)
+        let bmi = heightCM > 0 ? weightKG / pow(heightCM / 100.0, 2) : 24.0
+        let tempC = Int(weatherTempC.rounded())
+        let swimSuitable = isOutdoorSwimmingSuitable(
+            tempC: weatherTempC,
+            condition: weatherCondition,
+            windSpeedKmh: 9.0,
+            isAcuteRecovery: false
+        )
+        let likesSwim = fitnessPreferences.contains { $0.contains("游泳") }
+
+        // 决定主体质与兼夹特征
+        var primary = "痰湿质74分"
+        var secondary: [String] = []
+        var phaseName = "初筛试探校准期"
+        var stageKind: RegimenStageKind = .dampnessClearing
+        var principle = "健脾燥湿、温和试探，忌生冷观察3日反应"
+        var morningDrink = ("生姜陈皮温和饮", "老姜 1 片 + 陈皮 3g 温泡 10 分钟，观察半小时后胃部暖感与口干情况。", "温中和胃并测试温热耐受度。")
+        var lunchMeal = ("冬瓜薏米瘦肉温汤 + 杂粮饭", "\(diningEnvironment)清淡少油，瘦肉/鱼虾 130g 配半碗温热杂粮饭。", "高蛋白低脂健脾，兼顾减重与化湿。")
+
+        if let parsed, !parsed.constitutionTags.isEmpty {
+            primary = parsed.constitutionTags[0]
+            secondary = Array(parsed.constitutionTags.dropFirst())
+        } else if joinedAnswers.contains("上火下凉") || joinedAnswers.contains("上热下寒") {
+            primary = "寒热错杂质72分"
+            secondary = ["脾胃气弱", "上热下寒"]
+            phaseName = "引火归元试探期"
+            stageKind = .tonifying
+            principle = "清上温下、健运中焦，忌辛辣过燥与冰冷"
+            morningDrink = ("茯苓麦冬陈皮平调饮", "茯苓 6g + 麦冬 3g + 陈皮 2g 温泡代茶，既化中湿又防上火。", "平和调理上热下寒，避免纯姜燥热。")
+            lunchMeal = ("山药百合清炖鸡胸 + 绿叶时蔬", "\(diningEnvironment)温和清补，少辣少油，搭配半碗糙米饭。", "清润不过寒，护胃同时防口干长痘。")
+        } else if joinedAnswers.contains("口干口苦") || joinedAnswers.contains("偏热") || joinedAnswers.contains("易口干喉咙痛") || joinedAnswers.contains("干结") {
+            primary = "湿热质73分"
+            secondary = ["脾胃湿滞", "轻度内热"]
+            phaseName = "清化湿热校准期"
+            stageKind = .dampnessClearing
+            principle = "清利湿热、轻食通腑，忌辛辣姜桂温燥"
+            morningDrink = ("冬瓜荷叶炒薏米淡饮", "炒薏米 15g + 干荷叶 2g 煮水微温饮用，不加姜片。", "清化湿热并测试排便与口苦改善。")
+            lunchMeal = ("清蒸鲈鱼 + 清炒时蔬 + 杂粮饭", "\(diningEnvironment)少油少辣，多吃冬瓜、芹菜等利湿清蔬。", "清淡高蛋白利湿，避免助热生痰。")
+        } else if joinedAnswers.contains("怕冷") || joinedAnswers.contains("稀水") {
+            primary = "阳虚兼痰湿74分"
+            secondary = ["脾胃偏寒", "轻微气虚"]
+            phaseName = "温阳健脾试探期"
+            stageKind = .tonifying
+            principle = "温中散寒、健脾助阳，忌生冷果蔬冰饮"
+            morningDrink = ("生姜陈皮红枣温胃饮", "老姜 2 片 + 陈皮 3g + 去核红枣 2 颗沸水焖泡温服。", "温脾散寒，观察手脚回暖与肠胃舒适度。")
+            lunchMeal = ("山药排骨/鸡腿温汤 + 软米饭", "\(diningEnvironment)保证食物温热，配山药、南瓜等健脾食材。", "培补脾阳，改善畏寒与吃凉腹泻。")
+        } else {
+            if bmi >= 25.0 || joinedAnswers.contains("黏腻") || joinedAnswers.contains("头重") {
+                primary = "痰湿质75分"
+            } else {
+                primary = "气虚偏湿质68分"
+            }
+            if joinedAnswers.contains("气短") || joinedAnswers.contains("疲惫") {
+                secondary.append("轻微气虚")
+            }
+            if joinedAnswers.contains("吃凉") || joinedAnswers.contains("胀气") {
+                secondary.append("肠胃敏感")
+            }
+            if secondary.isEmpty {
+                secondary = ["脾运偏弱"]
+            }
+        }
+
+        // 计算置信度：基础 66%，+ 报告 18%，+ 舌象 14%，+ 深度追问 6%
+        var confidence = 66
+        if parsed != nil && !(parsed?.constitutionTags.isEmpty ?? true) {
+            confidence += 18
+        }
+        if hasTongueImage {
+            confidence += 14
+        }
+        if allAnswers.count >= 5 {
+            confidence += 6
+        }
+        confidence = min(92, confidence)
+
+        let needsTrial = confidence < 82
+        if !needsTrial {
+            phaseName = "日常顺时固本期"
+            stageKind = .maintenance
+        }
+
+        let fitnessCard: AIPlannedCardPayload
+        if likesSwim && swimSuitable {
+            fitnessCard = AIPlannedCardPayload(
+                category: "fitness",
+                timeSlot: "下午 16:30-17:20",
+                title: "阳光下室外游泳(限时30min)",
+                actionDetail: "中等配速蛙泳 30 分钟，上岸立即擦干穿外套，避免吹风受凉。",
+                reasoning: "\(city) \(tempC)°C \(weatherCondition)适宜下水，避开伤膝跑步。"
+            )
+        } else {
+            fitnessCard = AIPlannedCardPayload(
+                category: "fitness",
+                timeSlot: "下午 17:00-17:30",
+                title: "居家八段锦 + 微抗阻(20min)",
+                actionDetail: "八段锦两遍（调理脾胃须单举）+ 靠墙静蹲 3×45s + 弹力带划船 3×15。",
+                reasoning: "温和导引助脾运，同时保肌提升基础代谢。"
+            )
+        }
+
+        let cards = [
+            AIPlannedCardPayload(
+                category: "diet",
+                timeSlot: "上午 09:30",
+                title: morningDrink.0,
+                actionDetail: morningDrink.1,
+                reasoning: morningDrink.2
+            ),
+            AIPlannedCardPayload(
+                category: "diet",
+                timeSlot: "中午 12:00-13:30",
+                title: lunchMeal.0,
+                actionDetail: lunchMeal.1,
+                reasoning: lunchMeal.2
+            ),
+            fitnessCard,
+            AIPlannedCardPayload(
+                category: "lifestyle",
+                timeSlot: "晚上 21:30",
+                title: "温水泡脚 + 睡前 2 小时控水",
+                actionDetail: "40°C 温水泡脚 15 分钟至微润即止，23:00 前熄灯并记录今日体感。",
+                reasoning: "稳住夜间脾运与睡眠节律，助前3天试探校准。"
+            )
+        ]
+
+        let trialHint = needsTrial
+            ? "前 3 天先以温和方案「以方测证」，第 2 天复诊后将自动提升置信度。"
+            : "四诊信息充分，已直接建立专属日常顺时方案。"
+
+        return AIOnboardingConstitutionResponse(
+            primaryConstitution: primary,
+            secondaryTags: secondary,
+            confidencePercent: confidence,
+            needsThreeDayTrial: needsTrial,
+            clinicalSummary: "初诊倾向「\(primary)」\(secondary.isEmpty ? "" : "兼\(secondary.joined(separator: "、"))")（置信度 \(confidence)%）。\(trialHint)",
+            suggestedPhaseSpec: AIRegimenPhasePayload(
+                stageKind: stageKind.rawValue,
+                phaseName: phaseName,
+                therapeuticPrinciple: principle,
+                plannedDays: needsTrial ? 3 : 14,
+                exitCriteria: needsTrial
+                    ? "饮用晨间调理饮后胃肠舒适、不上火不腹胀，且第2天大便与精力向好"
+                    : "排便成形、晨起轻快不困重且作息平稳",
+                nextStageHint: needsTrial
+                    ? "第 2～3 天复诊确认耐受后，置信度升至 82%+ 并进入稳态期"
+                    : "持续顺时固本，随二十四节气微调"
+            ),
+            initialDayCards: cards,
+            baselineDeltaSummary: "完成四诊合参建档（初始置信度 \(confidence)%）",
+            baselineToleranceNote: needsTrial ? "前 3 天试探校准中，留意对晨饮与运动的反应" : "初始基线已建立"
+        )
+    }
 }

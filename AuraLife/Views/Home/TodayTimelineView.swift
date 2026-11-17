@@ -942,6 +942,15 @@ struct TodayTimelineView: View {
                 if evolution.shouldUpdateProfile && !evolution.updatedConstitutionTags.isEmpty {
                     profile.constitutionTags = evolution.updatedConstitutionTags
                 }
+                if outcome == .improved {
+                    profile.constitutionConfidencePercent = min(95, profile.constitutionConfidencePercent + 12)
+                    if profile.constitutionConfidencePercent >= 82 {
+                        profile.needsCalibrationTrial = false
+                    }
+                } else if outcome == .persistingOrWorse {
+                    profile.constitutionConfidencePercent = max(55, profile.constitutionConfidencePercent - 4)
+                    profile.needsCalibrationTrial = true
+                }
                 let trimmedTolerance = evolution.toleranceNote.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmedTolerance.isEmpty && !profile.toleranceNotes.contains(trimmedTolerance) {
                     profile.toleranceNotes.append(trimmedTolerance)

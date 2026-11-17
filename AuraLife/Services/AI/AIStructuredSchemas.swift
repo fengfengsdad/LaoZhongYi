@@ -5,6 +5,8 @@ enum AIStructuredSchemas {
     static let adjustmentSchemaName = "auralife_contextual_adjustment"
     static let cardSwapSchemaName = "auralife_card_swap"
     static let phaseTransitionSchemaName = "auralife_phase_transition"
+    static let onboardingFollowUpSchemaName = "auralife_onboarding_followup"
+    static let onboardingAssessmentSchemaName = "auralife_onboarding_assessment"
 
     static var multiDayPlanSchema: [String: Any] {
         [
@@ -239,6 +241,98 @@ enum AIStructuredSchemas {
                     "minItems": 3,
                     "maxItems": 6,
                     "items": plannedCardSchema
+                ]
+            ]
+        ]
+    }
+
+    static var onboardingFollowUpSchema: [String: Any] {
+        [
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["needFollowUp", "reasoningHint", "questions"],
+            "properties": [
+                "needFollowUp": [
+                    "type": "boolean",
+                    "description": "当基础四诊出现寒热交织、虚实未明或偏颇交界时填 true，否则填 false"
+                ],
+                "reasoningHint": [
+                    "type": "string",
+                    "description": "一句话说明为什么需要或无需补充追问"
+                ],
+                "questions": [
+                    "type": "array",
+                    "maxItems": 2,
+                    "items": [
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["id", "question", "options"],
+                        "properties": [
+                            "id": ["type": "string"],
+                            "question": ["type": "string"],
+                            "options": [
+                                "type": "array",
+                                "minItems": 2,
+                                "maxItems": 4,
+                                "items": ["type": "string"]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    }
+
+    static var onboardingAssessmentSchema: [String: Any] {
+        [
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "primaryConstitution",
+                "secondaryTags",
+                "confidencePercent",
+                "needsThreeDayTrial",
+                "clinicalSummary",
+                "suggestedPhaseSpec",
+                "initialDayCards",
+                "baselineDeltaSummary",
+                "baselineToleranceNote"
+            ],
+            "properties": [
+                "primaryConstitution": [
+                    "type": "string",
+                    "description": "主体质及倾向分，如：痰湿质74分、气虚质68分、湿热质72分"
+                ],
+                "secondaryTags": [
+                    "type": "array",
+                    "items": ["type": "string"]
+                ],
+                "confidencePercent": [
+                    "type": "integer",
+                    "description": "初筛判断置信度 45~95（仅问答一般65~75，结合舌象或报告可80~90）"
+                ],
+                "needsThreeDayTrial": [
+                    "type": "boolean",
+                    "description": "当置信度 < 80 或存在兼夹未定证型时填 true，开启3天以方测证试探校准"
+                ],
+                "clinicalSummary": [
+                    "type": "string",
+                    "description": "60字以内的初诊辨证小结，交代主兼体质、环境因素及是否需试探校准"
+                ],
+                "suggestedPhaseSpec": phaseSpecSchema,
+                "initialDayCards": [
+                    "type": "array",
+                    "minItems": 3,
+                    "maxItems": 5,
+                    "items": plannedCardSchema
+                ],
+                "baselineDeltaSummary": [
+                    "type": "string",
+                    "description": "首条演进基线摘要"
+                ],
+                "baselineToleranceNote": [
+                    "type": "string",
+                    "description": "初始耐受与禁忌注意事项"
                 ]
             ]
         ]

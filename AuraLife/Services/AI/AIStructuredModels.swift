@@ -122,6 +122,42 @@ struct AIConstitutionEvolutionPayload: Codable, Sendable {
     let toleranceNote: String
 }
 
+struct OnboardingInquiryAnswer: Identifiable, Sendable {
+    let id: String
+    let question: String
+    let answer: String
+}
+
+struct AIOnboardingFollowUpResponse: Codable, Sendable {
+    let needFollowUp: Bool
+    let reasoningHint: String
+    let questions: [AITriageQuestionPayload]
+}
+
+struct AIOnboardingConstitutionResponse: Codable, Sendable {
+    let primaryConstitution: String
+    let secondaryTags: [String]
+    let confidencePercent: Int
+    let needsThreeDayTrial: Bool
+    let clinicalSummary: String
+    let suggestedPhaseSpec: AIRegimenPhasePayload
+    let initialDayCards: [AIPlannedCardPayload]
+    let baselineDeltaSummary: String
+    let baselineToleranceNote: String
+
+    var allConstitutionTags: [String] {
+        var tags = [primaryConstitution]
+        for tag in secondaryTags where !tag.isEmpty && !tags.contains(tag) {
+            tags.append(tag)
+        }
+        return tags
+    }
+
+    var clampedConfidence: Int {
+        max(45, min(95, confidencePercent))
+    }
+}
+
 struct AIPhaseTransitionResponse: Codable, Sendable {
     let transitionDecision: String
     let clinicalAssessment: String

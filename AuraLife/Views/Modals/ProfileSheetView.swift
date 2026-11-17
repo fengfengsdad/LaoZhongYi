@@ -5,6 +5,7 @@ import UIKit
 
 struct ProfileSheetView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("auralife.onboarding.completed") private var hasCompletedOnboarding: Bool = true
     @Bindable var profile: UserConstitutionProfile
     @Query(sort: \ConstitutionEvolutionRecord.date, order: .forward) private var evolutionRecords: [ConstitutionEvolutionRecord]
 
@@ -27,6 +28,7 @@ struct ProfileSheetView: View {
                     evolutionTrendSection
                     preferencesSection
                     reportImportSection
+                    reopenOnboardingButton
                 }
                 .padding(16)
             }
@@ -109,9 +111,34 @@ struct ProfileSheetView: View {
 
     private var constitutionTagsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("体质辨识标签")
-                .font(.headline)
-                .foregroundStyle(AuraTheme.primaryText)
+            HStack {
+                Text("体质辨识标签")
+                    .font(.headline)
+                    .foregroundStyle(AuraTheme.primaryText)
+
+                Spacer()
+
+                HStack(spacing: 6) {
+                    Text("\(profile.assessmentMethod) · 置信度 \(profile.constitutionConfidencePercent)%")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(profile.constitutionConfidencePercent >= 80 ? AuraTheme.sageGreen : AuraTheme.warmGinger)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            (profile.constitutionConfidencePercent >= 80 ? AuraTheme.sageGreen : AuraTheme.warmGinger).opacity(0.13),
+                            in: Capsule()
+                        )
+
+                    if profile.needsCalibrationTrial {
+                        Text("校准中")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(AuraTheme.warmGinger, in: Capsule())
+                    }
+                }
+            }
 
             FlowTagsView(tags: profile.constitutionTags, tint: AuraTheme.warmGinger) { tag in
                 profile.constitutionTags.removeAll { $0 == tag }
@@ -385,9 +412,27 @@ struct ProfileSheetView: View {
         }
 
         profile.rawReportSummary = parsed.extractedText
+        profile.constitutionConfidencePercent = max(profile.constitutionConfidencePercent, 84)
+        profile.assessmentMethod = "报告解析"
+        profile.needsCalibrationTrial = false
         profile.updatedAt = .now
         HapticFeedback.notify(.success)
         parseBannerMessage = "已更新画像：识别到 \(parsed.constitutionTags.count) 项体质特征。"
+    }
+
+    private var reopenOnboardingButton: some View {
+        Button {
+            dismiss()
+            hasCompletedOnboarding = false
+        } label: {
+            Label("重新运行首次四诊合参建档引导", systemImage: "arrow.counterclockwise")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AuraTheme.secondaryText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(AuraTheme.subtleSurface.opacity(0.8), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 

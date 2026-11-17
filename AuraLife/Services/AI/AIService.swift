@@ -309,6 +309,130 @@ actor AIService {
         return AIGenerationResult(payload: payload, source: .liveLLM)
     }
 
+    // MARK: - Phase 9: Onboarding Adaptive Assessment
+
+    func generateAdaptiveOnboardingFollowUp(
+        heightCM: Double,
+        weightKG: Double,
+        targetWeightKG: Double,
+        baseAnswers: [OnboardingInquiryAnswer],
+        reportText: String,
+        hasTongueImage: Bool,
+        city: String,
+        weatherTempC: Double,
+        weatherCondition: String
+    ) async throws -> AIGenerationResult<AIOnboardingFollowUpResponse> {
+        let config = AIConfiguration.load()
+        AILog.info("AIService", "发起「建档十问歌自适应追问」 baseAnswers=\(baseAnswers.count), hasTongue=\(hasTongueImage)")
+
+        guard config.hasValidKey else {
+            try await Task.sleep(for: .milliseconds(320))
+            let demo = LocalContextPlanner.offlineOnboardingFollowUp(
+                baseAnswers: baseAnswers,
+                reportText: reportText,
+                hasTongueImage: hasTongueImage
+            )
+            return AIGenerationResult(payload: demo, source: .offlineDemo)
+        }
+
+        let prompt = AIPromptBuilder.onboardingFollowUpPrompt(
+            heightCM: heightCM,
+            weightKG: weightKG,
+            targetWeightKG: targetWeightKG,
+            baseAnswers: baseAnswers,
+            reportText: reportText,
+            hasTongueImage: hasTongueImage,
+            city: city,
+            weatherTempC: weatherTempC,
+            weatherCondition: weatherCondition
+        )
+
+        let payload: AIOnboardingFollowUpResponse = try await executeStructuredRequest(
+            config: config,
+            systemPrompt: AIPromptBuilder.systemPrompt,
+            userPrompt: prompt,
+            image: nil,
+            schemaName: AIStructuredSchemas.onboardingFollowUpSchemaName,
+            schema: AIStructuredSchemas.onboardingFollowUpSchema,
+            onStreamProgress: { _ in }
+        )
+        return AIGenerationResult(payload: payload, source: .liveLLM)
+    }
+
+    func evaluateOnboardingConstitution(
+        heightCM: Double,
+        weightKG: Double,
+        targetWeightKG: Double,
+        diningEnvironment: String,
+        dietaryPreferences: [String],
+        fitnessPreferences: [String],
+        allAnswers: [OnboardingInquiryAnswer],
+        reportText: String,
+        tongueImage: UIImage?,
+        city: String,
+        weatherTempC: Double,
+        weatherCondition: String,
+        weatherHumidity: Double,
+        onStreamProgress: @Sendable (String) -> Void
+    ) async throws -> AIGenerationResult<AIOnboardingConstitutionResponse> {
+        let config = AIConfiguration.load()
+        AILog.info("AIService", "发起「建档四诊合参综合辨证」 answers=\(allAnswers.count), hasTongue=\(tongueImage != nil), provider=\(config.provider.rawValue)")
+
+        guard config.hasValidKey else {
+            let demo = try await simulateStreaming(
+                steps: [
+                    "正在综合十问歌回答与 \(city) \(Int(weatherTempC.rounded()))°C 气象基线…",
+                    tongueImage != nil ? "正在融合自然光舌象苔色特征…" : "正在评估初筛置信度与试探校准需求…",
+                    "正在生成第 1 份专属顺时生活方案…"
+                ],
+                onStreamProgress: onStreamProgress
+            ) {
+                LocalContextPlanner.offlineOnboardingAssessment(
+                    heightCM: heightCM,
+                    weightKG: weightKG,
+                    targetWeightKG: targetWeightKG,
+                    diningEnvironment: diningEnvironment,
+                    dietaryPreferences: dietaryPreferences,
+                    fitnessPreferences: fitnessPreferences,
+                    allAnswers: allAnswers,
+                    reportText: reportText,
+                    hasTongueImage: tongueImage != nil,
+                    city: city,
+                    weatherTempC: weatherTempC,
+                    weatherCondition: weatherCondition
+                )
+            }
+            return AIGenerationResult(payload: demo, source: .offlineDemo)
+        }
+
+        let prompt = AIPromptBuilder.onboardingAssessmentPrompt(
+            heightCM: heightCM,
+            weightKG: weightKG,
+            targetWeightKG: targetWeightKG,
+            diningEnvironment: diningEnvironment,
+            dietaryPreferences: dietaryPreferences,
+            fitnessPreferences: fitnessPreferences,
+            allAnswers: allAnswers,
+            reportText: reportText,
+            hasTongueImage: tongueImage != nil,
+            city: city,
+            weatherTempC: weatherTempC,
+            weatherCondition: weatherCondition,
+            weatherHumidity: weatherHumidity
+        )
+
+        let payload: AIOnboardingConstitutionResponse = try await executeStructuredRequest(
+            config: config,
+            systemPrompt: AIPromptBuilder.systemPrompt,
+            userPrompt: prompt,
+            image: tongueImage,
+            schemaName: AIStructuredSchemas.onboardingAssessmentSchemaName,
+            schema: AIStructuredSchemas.onboardingAssessmentSchema,
+            onStreamProgress: onStreamProgress
+        )
+        return AIGenerationResult(payload: payload, source: .liveLLM)
+    }
+
     // MARK: - Core Structured Outputs + SSE Request Executor
 
     private func executeStructuredRequest<T: Decodable & Sendable>(

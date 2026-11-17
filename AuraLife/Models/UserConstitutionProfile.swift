@@ -11,6 +11,9 @@ final class UserConstitutionProfile {
     var dietaryPreferences: [String]
     var fitnessPreferences: [String]
     var toleranceNotes: [String] = []
+    var constitutionConfidencePercent: Int = 78
+    var assessmentMethod: String = "初始建档"
+    var needsCalibrationTrial: Bool = false
     var diningEnvironment: String
     var rawReportSummary: String
     var updatedAt: Date
@@ -24,6 +27,9 @@ final class UserConstitutionProfile {
         dietaryPreferences: [String] = ["忌生冷冰饮", "少油腻甜食", "偏爱温热汤羹"],
         fitnessPreferences: [String] = ["室外游泳40min", "讨厌传统跑步有氧", "居家轻抗阻"],
         toleranceNotes: [String] = [],
+        constitutionConfidencePercent: Int = 78,
+        assessmentMethod: String = "初始建档",
+        needsCalibrationTrial: Bool = false,
         diningEnvironment: String = "居家做饭",
         rawReportSummary: String = "",
         updatedAt: Date = .now
@@ -36,6 +42,9 @@ final class UserConstitutionProfile {
         self.dietaryPreferences = dietaryPreferences
         self.fitnessPreferences = fitnessPreferences
         self.toleranceNotes = toleranceNotes
+        self.constitutionConfidencePercent = max(30, min(100, constitutionConfidencePercent))
+        self.assessmentMethod = assessmentMethod
+        self.needsCalibrationTrial = needsCalibrationTrial
         self.diningEnvironment = diningEnvironment
         self.rawReportSummary = rawReportSummary
         self.updatedAt = updatedAt

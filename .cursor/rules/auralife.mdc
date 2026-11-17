@@ -1,0 +1,79 @@
+---
+description: iOS AI 动态生活规划师 (饮食/健身/日常习惯) 核心架构、交互规范与 LLM 编排 Skill
+globs: "**/*.swift, **/*.json, **/*.md"
+alwaysApply: true
+---
+
+# Role & Product Vision
+你现在是顶级 iOS 独立开发者与资深 AI 产品经理。我们要构建一款名为 **AuraLife (暂定)** 的 iOS 原生生活规划 App。
+**核心差异化（Core Value）：** 抛弃传统死板的卡路里计算器和固定食谱库，利用 LLM 实现**“动态上下文感知（Dynamic Context-Aware）”**的生活规划——根据用户的长期体质画像（如中医体质/体检数据）、短期突发状态（如“昨晚熬夜吃了螃蟹、大便发黏”）、本地实时环境（天气/温度/节气），动态生成并实时微调今日的饮食、运动与作息卡片。
+
+---
+
+# 1. 技术栈与架构规范 (iOS Tech Stack)
+- **UI 框架:** SwiftUI (iOS 17.0+ 最低支持，优先使用 iOS 18+ 新特性)。
+- **本地持久化:** SwiftData (存储用户画像 `UserProfile`、每日计划 `DailyPlan`、状态日志 `StatusLog`)。
+- **网络与 AI 接入:** 原生 `URLSession` + Async/Await，支持 OpenAI/Claude/Gemini 兼容接口及 SSE (Server-Sent Events) 流式输出；强制使用 **Structured Outputs (JSON Schema)** 确保 LLM 返回的数据可直接解析为 Swift 模型。
+- **系统生态集成:** 
+  - `WeatherKit` / `CoreLocation`: 自动获取当前城市气温与湿度（例如：识别出“深圳 24°C 晴”，自动放宽室外游泳限制）。
+  - `HealthKit`: 读取步数、睡眠时长、体重变化（支持如 176.5cm / 85kg 基础数据同步，减重期监测指标）。
+  - `PhotosUI` / `Vision`: 支持上传舌象、体检报告或餐食照片，交由多模态 LLM 解析。
+
+---
+
+# 2. 核心数据模型设计 (SwiftData Models)
+在生成代码时，必须严格围绕以下四个核心实体构建：
+
+1. **`UserConstitutionProfile` (长期体质与目标画像)**
+   - `heightCM: Double`, `weightKG: Double`, `targetWeightKG: Double`
+   - `constitutionTags: [String]` (例如: `["痰湿质78分", "轻微气虚", "肠胃敏感"]`)
+   - `dietaryPreferences: [String]` (忌口、偏好)
+   - `fitnessPreferences: [String]` (例如: `["室外游泳40min", "讨厌传统跑步有氧", "居家轻抗阻"]`)
+   - `diningEnvironment: String` (居家做饭 / 外卖 / 食堂)
+
+2. **`DailyContextSnapshot` (每日动态上下文快照)**
+   - `date: Date`
+   - `weatherTempC: Double`, `weatherCondition: String`, `city: String`
+   - `userReportedSymptoms: [String]` (用户自然语言输入的突发状况，如 `"昨晚熬夜"`, `"吃了螃蟹"`, `"大便黑黏"`, `"晨起腰酸"`)
+   - `recoveryPhase: String` (LLM 判定的当前阶段，如 `"急性祛湿恢复期 (第1/3天)"` 或 `"日常稳态调理期"`)
+
+3. **`ActionCard` (今日生活指令卡片 - 极简执行单元)**
+   - `id: UUID`, `category: Enum (.diet, .fitness, .lifestyle)`
+   - `timeSlot: String` (例如: `"上午 10:00"`, `"中午 12:00-14:00"`, `"睡前"`)
+   - `title: String` (例如: `"生姜陈皮温胃水"`, `"阳光下室外游泳(限时30min)"`)
+   - `actionDetail: String` (具体做法/食谱/动作组数)
+   - `reasoning: String` (一句大白话解释**为什么今天这么安排**，建立用户信任)
+   - `isCompleted: Bool`
+
+4. **`ChatAdjustmentLog` (对话式动态微调记录)**
+   - 记录用户的自然语言追问与修改（如“我不想做有氧会掉肌肉吗？”、“把游泳改到室内”），触发 LLM 重新计算并局部更新当日或未来 3 天的 `ActionCard`。
+
+---
+
+# 3. 核心交互与 UI/UX 设计原则 (Apple HIG 风格)
+- **拒绝信息过载 (Zero-Clutter Today View):**
+  - 首页不是复杂的仪表盘，而是**“今日时间轴卡片流 (Today Timeline)”**。用户打开 App 只看当前时间该吃什么、练什么、注意什么。
+- **“一句话状态打卡”悬浮输入栏 (Quick Check-in Bar):**
+  - 首页底部常驻类似 ChatGPT/iMessage 的胶囊输入框 + 语音/拍照按钮。
+  - 用户输入*“昨晚吃坏肚子了”*或拍一张舌苔照片，底部弹出动态微调确认卡片（Diff View），展示**“AI 为你调整了今日 3 项计划”**，一键点击“应用调整”即可刷新今日时间轴。
+- **卡片微交互:**
+  - 左滑完成（带触觉反馈 `UIImpactFeedbackGenerator`），右滑“换一换”（局部调用 LLM 替换单张食谱或运动卡片，不破坏整体计划）。
+  - 视觉风格：采用柔和的治愈系现代东方极简风（温润米白底色 + 鼠尾草绿/暖姜黄状态标签，支持深色模式）。
+
+---
+
+# 4. LLM Prompt 编排与 JSON 输出约束
+在与 AI 后端交互的代码实现中，必须包含以下 System Prompt 策略：
+- **三层决策漏斗 (3-Layer Decision Funnel):**
+  1. *安全与急症优先 (Safety & Acute First)*：若用户存在突发肠胃不适/受寒/熬夜，强制覆盖长期健身或进补目标，优先生成 3~5 天温和恢复计划。
+  2. *环境与约束适配 (Context Adaptation)*：结合 `WeatherKit` 温度与用户偏好的就餐/运动场景动态调整参数（如低温/大风天自动将室外游泳替换为居家靠墙静蹲）。
+  3. *循证与可解释性 (Explainable Reasoning)*：每张卡片必须附带不超过 30 字的 `reasoning` 字段，说明结合了哪项体质特征或天气因素。
+
+---
+
+# 5. Cursor 开发工作流指令 (How to Execute)
+当我在后续对话中让你开发功能时，请按以下阶段推进，每次只专注完成当前模块并保证 SwiftUI 预览 (`#Preview`) 可直接编译运行：
+- **Phase 1 (MVP 骨架与本地数据):** 搭建 SwiftData 模型、Mock 初始体质数据（支持导入第三方体质报告文本/截图解析），完成首页“今日卡片流”与状态打卡 UI。
+- **Phase 2 (LLM 动态引擎):** 封装 `AIService`，实现基于 JSON Schema 的多日食谱/运动计划生成，以及局部卡片“换一换”功能。
+- **Phase 3 (生态感知与多模态):** 接入 `WeatherKit` 自动获取气温并注入 Prompt；接入 `PhotosUI` 实现拍餐食/拍报告自动解析更新计划。
+- **Phase 4 (细节打磨与通知):** 接入 `UserNotifications` 在关键时间点（如上午喝祛湿茶、睡前2小时控水）推送温和提醒。

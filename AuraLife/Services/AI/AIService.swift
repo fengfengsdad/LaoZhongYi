@@ -146,6 +146,8 @@ actor AIService {
 
     func proposeContextualAdjustment(
         userInput: String,
+        triageAnswers: [AITriageAnswer] = [],
+        extraTriageNote: String? = nil,
         attachedImage: UIImage?,
         photoIntent: PhotoCheckInIntent = .auto,
         recognizedPhotoText: String? = nil,
@@ -154,7 +156,7 @@ actor AIService {
         onStreamProgress: @Sendable (String) -> Void
     ) async throws -> AIGenerationResult<AIAdjustmentResponse> {
         let config = AIConfiguration.load()
-        AILog.info("AIService", "发起「动态微调」 input=\"\(userInput)\", hasImage=\(attachedImage != nil), intent=\(photoIntent.rawValue), provider=\(config.provider.rawValue), model=\(config.model), streaming=\(config.enableStreaming), hasKey=\(config.hasValidKey)")
+        AILog.info("AIService", "发起「动态微调」 input=\"\(userInput)\", triageAnswers=\(triageAnswers.count), hasImage=\(attachedImage != nil), intent=\(photoIntent.rawValue), provider=\(config.provider.rawValue), model=\(config.model), streaming=\(config.enableStreaming), hasKey=\(config.hasValidKey)")
 
         guard config.hasValidKey, let primarySnapshot = snapshots.first else {
             AILog.info("AIService", "未检测到 API Key（或快照为空），走离线演示引擎")
@@ -162,17 +164,19 @@ actor AIService {
             let demo = try await simulateStreaming(
                 steps: [
                     "正在结合 \(fallbackSnapshot.city) \(Int(fallbackSnapshot.weatherTempC.rounded()))°C \(fallbackSnapshot.weatherCondition)与\(fallbackSnapshot.solarTermName)节气…",
-                    "正在应用「三层决策漏斗」评估状态与体征…",
-                    "正在生成今日及后续几日计划 Diff…"
+                    triageAnswers.isEmpty ? "正在评估是否需辨证寒热虚实…" : "正在依据轻问诊结果匹配证型与治则…",
+                    "正在生成结构化评估结果…"
                 ],
                 onStreamProgress: onStreamProgress
             ) {
-                Self.offlineAdjustment(
-                    userInput: userInput,
+                LocalContextPlanner.evaluateOfflineAdjustment(
+                    input: userInput,
+                    triageAnswers: triageAnswers,
+                    extraTriageNote: extraTriageNote,
                     hasAttachedImage: attachedImage != nil,
                     photoIntent: photoIntent,
                     recognizedPhotoText: recognizedPhotoText,
-                    profile: profile,
+                    diningEnvironment: profile?.diningEnvironment,
                     snapshot: fallbackSnapshot
                 )
             }
@@ -182,6 +186,8 @@ actor AIService {
         _ = primarySnapshot
         let prompt = AIPromptBuilder.adjustmentPrompt(
             userInput: userInput,
+            triageAnswers: triageAnswers,
+            extraTriageNote: extraTriageNote,
             hasAttachedImage: attachedImage != nil,
             photoIntent: photoIntent,
             recognizedPhotoText: recognizedPhotoText,
@@ -962,58 +968,6 @@ actor AIService {
                 : "已结合痰湿质画像与 \(snapshot.city) \(tempC)°C 天气生成未来 \(dayTemplates.count) 天顺时方案。",
             phaseSpec: phaseSpec,
             days: dayTemplates
-        )
-    }
-
-    private static func offlineAdjustment(
-        userInput: String,
-        hasAttachedImage: Bool,
-        photoIntent: PhotoCheckInIntent,
-        recognizedPhotoText: String?,
-        profile: AIProfileContext?,
-        snapshot: AISnapshotContext
-    ) -> AIAdjustmentResponse {
-        let local = LocalContextPlanner.proposeOfflineAdjustment(
-            input: userInput,
-            hasAttachedImage: hasAttachedImage,
-            photoIntent: photoIntent,
-            recognizedPhotoText: recognizedPhotoText,
-            diningEnvironment: profile?.diningEnvironment,
-            snapshot: snapshot
-        )
-
-        var diffs = local.diffs.map { diff in
-            AICardDiffPayload(
-                dayOffset: 0,
-                targetCardID: diff.targetCardID?.uuidString,
-                category: diff.category.rawValue,
-                timeSlot: diff.timeSlot,
-                updatedTitle: diff.updatedTitle,
-                updatedDetail: diff.updatedDetail,
-                updatedReasoning: diff.updatedReasoning
-            )
-        }
-
-        if local.proposedPhase.contains("恢复期") {
-            diffs.append(
-                AICardDiffPayload(
-                    dayOffset: 1,
-                    targetCardID: nil,
-                    category: ActionCategory.diet.rawValue,
-                    timeSlot: "中午 12:00-13:30",
-                    updatedTitle: "明日衔接：清蒸鲈鱼 + 温热软米饭",
-                    updatedDetail: "恢复期第2天继续忌生冷海鲜，采用高蛋白温热软食巩固脾胃。",
-                    updatedReasoning: "延续3日恢复节奏，防肠胃二次受凉。"
-                )
-            )
-        }
-
-        return AIAdjustmentResponse(
-            proposedPhase: local.proposedPhase,
-            phaseSpec: local.phaseSpec,
-            detectedSymptoms: local.detectedSymptoms,
-            summary: local.summary,
-            diffs: diffs
         )
     }
 }

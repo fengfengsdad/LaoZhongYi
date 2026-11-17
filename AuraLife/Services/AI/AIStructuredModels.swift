@@ -19,6 +19,18 @@ struct AIRegimenPhasePayload: Codable, Sendable {
     }
 }
 
+struct AITriageQuestionPayload: Codable, Sendable, Identifiable {
+    let id: String
+    let question: String
+    let options: [String]
+}
+
+struct AITriageAnswer: Identifiable, Sendable {
+    let id: String
+    let question: String
+    let selectedOption: String
+}
+
 struct AIPlannedCardPayload: Codable, Sendable {
     let category: String
     let timeSlot: String
@@ -75,11 +87,18 @@ struct AICardDiffPayload: Codable, Sendable {
 }
 
 struct AIAdjustmentResponse: Codable, Sendable {
+    let resolutionStatus: String
+    let clarificationReason: String
+    let triageQuestions: [AITriageQuestionPayload]
     let proposedPhase: String
     let phaseSpec: AIRegimenPhasePayload
     let detectedSymptoms: [String]
     let summary: String
     let diffs: [AICardDiffPayload]
+
+    var needsClarification: Bool {
+        resolutionStatus == "needsClarification" && !triageQuestions.isEmpty
+    }
 }
 
 struct AICardSwapResponse: Codable, Sendable {

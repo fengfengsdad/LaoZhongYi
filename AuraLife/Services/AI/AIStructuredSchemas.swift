@@ -54,8 +54,46 @@ enum AIStructuredSchemas {
         [
             "type": "object",
             "additionalProperties": false,
-            "required": ["proposedPhase", "phaseSpec", "detectedSymptoms", "summary", "diffs"],
+            "required": [
+                "resolutionStatus",
+                "clarificationReason",
+                "triageQuestions",
+                "proposedPhase",
+                "phaseSpec",
+                "detectedSymptoms",
+                "summary",
+                "diffs"
+            ],
             "properties": [
+                "resolutionStatus": [
+                    "type": "string",
+                    "enum": ["needsClarification", "readyToAdjust"],
+                    "description": "当用户症状寒热虚实不明确且未补充追问时填 needsClarification；偏好类调整或信息已充足时填 readyToAdjust"
+                ],
+                "clarificationReason": [
+                    "type": "string",
+                    "description": "若为 needsClarification，用1句话解释为何需要补充辨证（不超过45字）；否则填空字符串"
+                ],
+                "triageQuestions": [
+                    "type": "array",
+                    "maxItems": 2,
+                    "description": "当 resolutionStatus 为 needsClarification 时提供 1~2 道极简辨证选择题；readyToAdjust 时为空数组",
+                    "items": [
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["id", "question", "options"],
+                        "properties": [
+                            "id": ["type": "string"],
+                            "question": ["type": "string"],
+                            "options": [
+                                "type": "array",
+                                "minItems": 2,
+                                "maxItems": 3,
+                                "items": ["type": "string"]
+                            ]
+                        ]
+                    ]
+                ],
                 "proposedPhase": [
                     "type": "string",
                     "description": "例如：急性祛湿恢复期 (第1/3天) 或 日常顺时固本期"
@@ -71,7 +109,7 @@ enum AIStructuredSchemas {
                 ],
                 "diffs": [
                     "type": "array",
-                    "minItems": 1,
+                    "description": "readyToAdjust 时返回 1 条以上调整；needsClarification 时返回空数组 []",
                     "items": [
                         "type": "object",
                         "additionalProperties": false,

@@ -40,6 +40,21 @@ struct AdjustmentDiffSheet: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(AuraTheme.subtleSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
+                        if let triageSummary = proposal.triageSummary, !triageSummary.isEmpty {
+                            HStack(alignment: .top, spacing: 6) {
+                                Text("轻问诊辨证")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(AuraTheme.sageGreen)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(AuraTheme.sageGreen.opacity(0.13), in: Capsule())
+
+                                Text(triageSummary)
+                                    .font(.caption)
+                                    .foregroundStyle(AuraTheme.primaryText)
+                            }
+                        }
+
                         HStack(spacing: 6) {
                             Label(stageKind.displayName, systemImage: stageKind.systemImage)
                                 .font(.caption.weight(.semibold))

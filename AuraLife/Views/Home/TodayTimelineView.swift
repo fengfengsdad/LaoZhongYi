@@ -26,6 +26,8 @@ struct TodayTimelineView: View {
     @State private var hasSyncedInitialEnvironment: Bool = false
 
     @State private var pendingProposal: AdjustmentProposal?
+    @State private var pendingTriageSession: SymptomTriageSession?
+    @State private var isSubmittingTriage: Bool = false
     @State private var isShowingProfile: Bool = false
     @State private var isShowingHistory: Bool = false
     @State private var isShowingAISettings: Bool = false
@@ -202,6 +204,24 @@ struct TodayTimelineView: View {
             Task {
                 await handleAttachedPhotoSelection(newItem)
             }
+        }
+        .sheet(item: $pendingTriageSession) { session in
+            SymptomTriageSheet(
+                session: session,
+                isSubmitting: isSubmittingTriage,
+                onSubmitAnswers: { answers, extraNote in
+                    Task {
+                        await submitTriageClarification(
+                            originalInput: session.userInput,
+                            answers: answers,
+                            extraNote: extraNote
+                        )
+                    }
+                },
+                onCancel: {
+                    pendingTriageSession = nil
+                }
+            )
         }
         .sheet(item: $pendingProposal) { proposal in
             AdjustmentDiffSheet(
@@ -460,14 +480,86 @@ struct TodayTimelineView: View {
                 byOffset[idx] = snap
             }
 
-            pendingProposal = LocalContextPlanner.makeProposal(
+            let outcome = LocalContextPlanner.makeEvaluationOutcome(
                 from: result.payload,
                 userInput: effectiveInput,
                 source: result.source,
                 snapshotsByOffset: byOffset
             )
+
+            switch outcome {
+            case let .needsClarification(session):
+                pendingTriageSession = session
+            case let .ready(proposal):
+                pendingProposal = proposal
+            }
         } catch {
             AILog.error("UI", "状态打卡微调失败: \(error.localizedDescription)")
+            errorAlertMessage = error.localizedDescription
+        }
+    }
+
+    private func submitTriageClarification(
+        originalInput: String,
+        answers: [AITriageAnswer],
+        extraNote: String
+    ) async {
+        let snapshotsList = orderedSnapshots
+        guard !snapshotsList.isEmpty else { return }
+
+        isSubmittingTriage = true
+        streamingStatus = "正在结合辨证结果生成调理方案…"
+        defer {
+            isSubmittingTriage = false
+            streamingStatus = nil
+        }
+
+        let profileContext = activeProfile.map(AIProfileContext.init(profile:))
+        let snapshotContexts = snapshotsList.map(AISnapshotContext.init(snapshot:))
+        let attachedSnapshot = attachedImage
+        let intentSnapshot = photoIntent
+        let ocrSnapshot = recognizedPhotoText
+
+        do {
+            let result = try await AIService.shared.proposeContextualAdjustment(
+                userInput: originalInput,
+                triageAnswers: answers,
+                extraTriageNote: extraNote,
+                attachedImage: attachedSnapshot,
+                photoIntent: intentSnapshot,
+                recognizedPhotoText: ocrSnapshot,
+                profile: profileContext,
+                snapshots: snapshotContexts,
+                onStreamProgress: { progress in
+                    Task { @MainActor in
+                        streamingStatus = progress
+                    }
+                }
+            )
+
+            var byOffset: [Int: DailyContextSnapshot] = [:]
+            for (idx, snap) in snapshotsList.enumerated() {
+                byOffset[idx] = snap
+            }
+
+            let outcome = LocalContextPlanner.makeEvaluationOutcome(
+                from: result.payload,
+                userInput: originalInput,
+                triageAnswers: answers,
+                source: result.source,
+                snapshotsByOffset: byOffset
+            )
+
+            pendingTriageSession = nil
+            switch outcome {
+            case let .ready(proposal):
+                pendingProposal = proposal
+            case let .needsClarification(nextSession):
+                pendingTriageSession = nextSession
+            }
+        } catch {
+            AILog.error("UI", "轻问诊二次辨证失败: \(error.localizedDescription)")
+            pendingTriageSession = nil
             errorAlertMessage = error.localizedDescription
         }
     }
@@ -625,8 +717,9 @@ struct TodayTimelineView: View {
                 }
             }
 
+            let triageDetail = proposal.triageSummary.map { " [辨证：\($0)]" } ?? ""
             let log = ChatAdjustmentLog(
-                userInput: proposal.userInput,
+                userInput: "\(proposal.userInput)\(triageDetail)",
                 aiSummary: "[\(proposal.source.rawValue)] \(proposal.summary)",
                 affectedCardTitles: proposal.diffs.map(\.updatedTitle),
                 wasApplied: true

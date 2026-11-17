@@ -6,6 +6,15 @@
 
 ## [Unreleased] - develop
 
+### Added (Phase 6：两段式轻问诊与寒热虚实辨证追问)
+- 新增 `SymptomTriageSheet` 轻问诊弹窗（支持 `#Preview`），针对存在寒热虚实歧义的症状输入提供 1～2 道极简点选胶囊题与可选体感补充。
+- 在 `AIStructuredModels` 与 `AIStructuredSchemas` 中新增 `resolutionStatus`（`needsClarification` / `readyToAdjust`）、`clarificationReason` 与 `triageQuestions` 双分支结构化输出。
+- 在 `LocalContextPlanner` 中实现「同症异治」离线演示辨证逻辑：寒湿偏盛推荐温中焦米姜水，湿热积滞自动撤姜改用冬瓜荷叶淡饮与清疏导滞。
+
+### Changed (Phase 6)
+- 升级 `AIPromptBuilder`、`AIService` 与 `TodayTimelineView`，实现偏好调整直出 Diff、模糊症状先追问再定方的两段式动态微调流，并将辨证结论记入 `ChatAdjustmentLog` 与 `AdjustmentDiffSheet`。
+- 在 `QuickCheckInBar` 快捷状态词中新增「昨晚吃坏肚子了」，便于直接触发两段式轻问诊体验。
+
 ### Added (Phase 5：中医分期与治法模型)
 - 新增 `RegimenPhase` SwiftData 模型与 `RegimenStageKind` 四期临床枚举（`急症治标期` / `祛邪疏通期` / `缓调扶正期` / `顺时固本期`），记录治法总则、预计周期、转段标准（Exit Criteria）、下一阶段方向与生命周期状态。
 - 新增 `RegimenPhaseRoadmapSheet` 视图，展示当前调理阶段进度条、治法总则、转段标准、中医四阶段演进路线图与历史阶段记录。
@@ -17,7 +26,6 @@
 - 升级首页 `RecoveryBannerView` 与 `AdjustmentDiffSheet`，展示当前分期进度（如 `第 1/3 天`）及「治则」横条，应用微调时自动归档旧阶段并切换至新阶段。
 
 ### Planned
-- **Phase 6**：两段式轻问诊与寒热虚实辨证追问（Interactive Triage）
 - **Phase 7**：周期复诊转段闭环（Follow-up & Stage Transition）
 - **Phase 8**：体质画像动态演化与个人医案（Constitution Evolution）
 

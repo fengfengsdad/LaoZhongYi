@@ -245,6 +245,8 @@ enum AIPromptBuilder {
 
     static func adjustmentPrompt(
         userInput: String,
+        triageAnswers: [AITriageAnswer] = [],
+        extraTriageNote: String? = nil,
         hasAttachedImage: Bool,
         photoIntent: PhotoCheckInIntent,
         recognizedPhotoText: String?,
@@ -266,6 +268,28 @@ enum AIPromptBuilder {
             }
         }
 
+        var triageBlock = ""
+        if !triageAnswers.isEmpty {
+            let answerLines = triageAnswers.map { "  - \($0.question) → \($0.selectedOption)" }.joined(separator: "\n")
+            let noteText = extraTriageNote?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let noteLine = (noteText?.isEmpty == false) ? "\n  - 用户补充说明：\(noteText!)" : ""
+            triageBlock = """
+
+            补充轻问诊辨证结果（用户已回答）：
+            \(answerLines)\(noteLine)
+            """
+        }
+
+        let routingRule = triageAnswers.isEmpty
+            ? """
+            - 分流判断（两段式轻问诊）：
+              1) 若用户输入属于**偏好/场景变更**（如“把游泳改室内”、“不想做有氧”、“天气变化重排”）或**已包含明确寒热/诱因/舌苔细节**（如“昨晚熬夜吃了螃蟹、大便发黏”），请将 `resolutionStatus` 设为 `"readyToAdjust"`，`triageQuestions` 设为 `[]`，直接输出 `phaseSpec` 与 `diffs`。
+              2) 若用户输入属于**模糊身体症状**（如“吃坏肚子了”、“拉肚子”、“没胃口腰酸”、“有点上火/不适”）且寒热虚实尚不明确（寒湿与湿热治法截然相反），请将 `resolutionStatus` 设为 `"needsClarification"`，在 `triageQuestions` 中返回 1~2 道极简单选题（每题 2~3 个选项）以分辨寒热虚实，`diffs` 返回 `[]`。
+            """
+            : """
+            - 用户已完成轻问诊补充辨证，本次必须将 `resolutionStatus` 设为 `"readyToAdjust"`，`triageQuestions` 设为 `[]`，严格依据用户的寒热虚实回答（寒湿则温中散寒，湿热则清热利湿，气虚则健脾扶正）输出精准的 `phaseSpec` 与 `diffs`。
+            """
+
         return """
         \(profileSection(profile))
 
@@ -273,11 +297,11 @@ enum AIPromptBuilder {
         \(multiDayHints.isEmpty ? "" : "\n未来几日现有安排：\n\(multiDayHints)")
 
         用户最新输入：
-        「\(userInput)」\(imageHint)
+        「\(userInput)」\(imageHint)\(triageBlock)
 
         任务：请严格按「辨证 → 立法 → 分期」评估用户输入与实时环境上下文：
-        - 输出 `phaseSpec`（若需切换阶段，如从顺时固本期切入 `acuteRelief` 急症治标期，请明确新阶段的治法总则、预计天数与转段标准；若未改变阶段，则沿用并精炼当前阶段信息）。
-        - 生成需要微调的计划变更（diffs）。替换已有卡片时，`targetCardID` 请精确填写上方现有卡片的 UUID；若是新增卡片或未来几日整体重排，可填 null。
+        \(routingRule)
+        - 替换已有卡片时，`targetCardID` 请精确填写上方现有卡片的 UUID；若是新增卡片或未来几日整体重排，可填 null。
         """
     }
 

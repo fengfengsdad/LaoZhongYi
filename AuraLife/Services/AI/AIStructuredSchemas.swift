@@ -4,6 +4,7 @@ enum AIStructuredSchemas {
     static let multiDayPlanSchemaName = "auralife_multi_day_plan"
     static let adjustmentSchemaName = "auralife_contextual_adjustment"
     static let cardSwapSchemaName = "auralife_card_swap"
+    static let phaseTransitionSchemaName = "auralife_phase_transition"
 
     static var multiDayPlanSchema: [String: Any] {
         [
@@ -167,6 +168,47 @@ enum AIStructuredSchemas {
                 "reasoning": [
                     "type": "string",
                     "description": "不超过30字的大白话解释，说明结合了哪项体质特征或天气因素"
+                ]
+            ]
+        ]
+    }
+
+    static var phaseTransitionSchema: [String: Any] {
+        [
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "transitionDecision",
+                "clinicalAssessment",
+                "summary",
+                "newPhaseSpec",
+                "remainingSymptoms",
+                "cards"
+            ],
+            "properties": [
+                "transitionDecision": [
+                    "type": "string",
+                    "enum": ["advanceToNextStage", "extendCurrentStage", "adjustPlan"],
+                    "description": "advanceToNextStage=症状好转推进至下一阶段，extendCurrentStage=延续当前阶段巩固，adjustPlan=重估调整"
+                ],
+                "clinicalAssessment": [
+                    "type": "string",
+                    "description": "一句中医复诊评估结论，如：脾胃寒湿已退七八，具备转入祛邪疏通期条件"
+                ],
+                "summary": [
+                    "type": "string",
+                    "description": "向用户解释本次转段或巩固的核心变化"
+                ],
+                "newPhaseSpec": phaseSpecSchema,
+                "remainingSymptoms": [
+                    "type": "array",
+                    "items": ["type": "string"]
+                ],
+                "cards": [
+                    "type": "array",
+                    "minItems": 3,
+                    "maxItems": 6,
+                    "items": plannedCardSchema
                 ]
             ]
         ]

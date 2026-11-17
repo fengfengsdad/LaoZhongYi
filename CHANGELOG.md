@@ -6,6 +6,15 @@
 
 ## [Unreleased] - develop
 
+### Added (Phase 7：周期复诊转段闭环)
+- 新增 `FollowUpOutcome`（明显好转 / 略有改善需巩固 / 仍有不适或新变化）与 `RegimenPhase.shouldSuggestFollowUp` 复诊节点判定逻辑。
+- 新增 `PhaseFollowUpBannerCard`（今日时间轴复诊提示卡）与 `PhaseFollowUpSheet`（复诊评估与转段预览弹窗，支持 `#Preview`）。
+- 在 `AIStructuredModels`、`AIStructuredSchemas`、`AIPromptBuilder` 与 `AIService` 中新增 `evaluatePhaseFollowUp` 接口与 `auralife_phase_transition` Schema，在 `LocalContextPlanner` 中完善四阶段逐级推演逻辑（`急症治标 → 祛邪疏通 → 缓调扶正 → 顺时固本`）。
+
+### Changed (Phase 7)
+- 升级 `RegimenPhaseRoadmapSheet`，支持在阶段路线图中随时手动发起「阶段复诊 / 评估转段」。
+- 升级 `TodayTimelineView`，支持自动归档旧阶段、开启或顺延阶段、重排当日卡片、记录 `ChatAdjustmentLog` 并同步刷新温和通知。
+
 ### Added (Phase 6：两段式轻问诊与寒热虚实辨证追问)
 - 新增 `SymptomTriageSheet` 轻问诊弹窗（支持 `#Preview`），针对存在寒热虚实歧义的症状输入提供 1～2 道极简点选胶囊题与可选体感补充。
 - 在 `AIStructuredModels` 与 `AIStructuredSchemas` 中新增 `resolutionStatus`（`needsClarification` / `readyToAdjust`）、`clarificationReason` 与 `triageQuestions` 双分支结构化输出。
@@ -26,7 +35,6 @@
 - 升级首页 `RecoveryBannerView` 与 `AdjustmentDiffSheet`，展示当前分期进度（如 `第 1/3 天`）及「治则」横条，应用微调时自动归档旧阶段并切换至新阶段。
 
 ### Planned
-- **Phase 7**：周期复诊转段闭环（Follow-up & Stage Transition）
 - **Phase 8**：体质画像动态演化与个人医案（Constitution Evolution）
 
 ---

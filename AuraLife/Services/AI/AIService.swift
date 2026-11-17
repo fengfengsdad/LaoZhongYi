@@ -261,6 +261,54 @@ actor AIService {
         return AIGenerationResult(payload: payload, source: .liveLLM)
     }
 
+    func evaluatePhaseFollowUp(
+        outcome: FollowUpOutcome,
+        userNote: String,
+        profile: AIProfileContext?,
+        snapshot: AISnapshotContext,
+        onStreamProgress: @Sendable (String) -> Void
+    ) async throws -> AIGenerationResult<AIPhaseTransitionResponse> {
+        let config = AIConfiguration.load()
+        AILog.info("AIService", "发起「复诊转段评估」 outcome=\(outcome.rawValue), currentStage=\(snapshot.activePhase?.stageKind.rawValue ?? "none"), provider=\(config.provider.rawValue)")
+
+        guard config.hasValidKey else {
+            let demo = try await simulateStreaming(
+                steps: [
+                    "正在对照转段标准评估当前阶段恢复度…",
+                    "正在推演下一调理阶段与治法总则…",
+                    "正在生成今日顺时食养与导引卡片…"
+                ],
+                onStreamProgress: onStreamProgress
+            ) {
+                LocalContextPlanner.offlinePhaseTransition(
+                    outcome: outcome,
+                    userNote: userNote,
+                    profile: profile,
+                    snapshot: snapshot
+                )
+            }
+            return AIGenerationResult(payload: demo, source: .offlineDemo)
+        }
+
+        let prompt = AIPromptBuilder.phaseFollowUpPrompt(
+            outcome: outcome,
+            userNote: userNote,
+            profile: profile,
+            snapshot: snapshot
+        )
+
+        let payload: AIPhaseTransitionResponse = try await executeStructuredRequest(
+            config: config,
+            systemPrompt: AIPromptBuilder.systemPrompt,
+            userPrompt: prompt,
+            image: nil,
+            schemaName: AIStructuredSchemas.phaseTransitionSchemaName,
+            schema: AIStructuredSchemas.phaseTransitionSchema,
+            onStreamProgress: onStreamProgress
+        )
+        return AIGenerationResult(payload: payload, source: .liveLLM)
+    }
+
     // MARK: - Core Structured Outputs + SSE Request Executor
 
     private func executeStructuredRequest<T: Decodable & Sendable>(

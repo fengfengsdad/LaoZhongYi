@@ -324,4 +324,29 @@ enum AIPromptBuilder {
         请给出一个明显不同但同样契合用户体质、治法总则、节气、实时天气（\(snapshot.city) \(Int(snapshot.weatherTempC.rounded()))°C \(snapshot.weatherCondition) 湿度\(Int(snapshot.weatherHumidity.rounded()))%）的替代方案，且 `reasoning` 不超过 30 字。
         """
     }
+
+    static func phaseFollowUpPrompt(
+        outcome: FollowUpOutcome,
+        userNote: String,
+        profile: AIProfileContext?,
+        snapshot: AISnapshotContext
+    ) -> String {
+        let trimmedNote = userNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noteLine = trimmedNote.isEmpty ? "无额外补充" : trimmedNote
+
+        return """
+        \(profileSection(profile))
+
+        \(snapshotSection(snapshot))
+
+        复诊评估请求：
+        - 用户当前反馈：\(outcome.title)（\(outcome.subtitle)）
+        - 用户补充说明：\(noteLine)
+
+        任务：请严格依据中医「效不更方，变证易法」与转归规律进行复诊判断：
+        1. 若用户明显好转：按 `急症治标期(acuteRelief) -> 祛邪疏通期(dampnessClearing) -> 缓调扶正期(tonifying) -> 顺时固本期(maintenance)` 顺序推进至下一阶段，设置 `transitionDecision = "advanceToNextStage"`，更新 `newPhaseSpec`，清空已缓解症状，并生成紧扣新治则的今日 4 张卡片。
+        2. 若用户略有改善仍需巩固：设置 `transitionDecision = "extendCurrentStage"`，沿用当前阶段并微调更稳妥的过渡饮食与运动。
+        3. 若仍有不适或出现新变化：设置 `transitionDecision = "adjustPlan"`，结合补充说明重新立法与重排今日 4 张卡片。
+        """
+    }
 }

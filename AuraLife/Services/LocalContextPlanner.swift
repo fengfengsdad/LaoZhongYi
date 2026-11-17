@@ -812,4 +812,278 @@ enum LocalContextPlanner {
         }
         return pool.first ?? (excludingTitle, "", "")
     }
+
+    static func offlinePhaseTransition(
+        outcome: FollowUpOutcome,
+        userNote: String,
+        profile: AIProfileContext?,
+        snapshot: AISnapshotContext
+    ) -> AIPhaseTransitionResponse {
+        let currentStage = snapshot.activePhase?.stageKind ?? (snapshot.isAcuteRecovery ? .acuteRelief : .maintenance)
+        let diningEnv = profile?.diningEnvironment ?? "居家做饭"
+        let tempC = Int(snapshot.weatherTempC.rounded())
+        let swimSuitable = isOutdoorSwimmingSuitable(
+            tempC: snapshot.weatherTempC,
+            condition: snapshot.weatherCondition,
+            windSpeedKmh: snapshot.weatherWindSpeedKmh,
+            isAcuteRecovery: false
+        )
+
+        switch outcome {
+        case .improved:
+            let nextStage = currentStage.nextTypicalStage
+            switch nextStage {
+            case .dampnessClearing:
+                let spec = AIRegimenPhasePayload(
+                    stageKind: RegimenStageKind.dampnessClearing.rawValue,
+                    phaseName: "祛邪疏通期",
+                    therapeuticPrinciple: "健脾燥湿、温和行气，逐步恢复清淡蛋白",
+                    plannedDays: 4,
+                    exitCriteria: "舌苔由厚转薄、大便成形且午后不困倦",
+                    nextStageHint: "转入「缓调扶正期」，恢复抗阻训练与减重节奏"
+                )
+                return AIPhaseTransitionResponse(
+                    transitionDecision: "advanceToNextStage",
+                    clinicalAssessment: "急性胃肠反应已平复，现转入「祛邪疏通期」巩固化湿。",
+                    summary: "已从急症护胃过渡到健脾祛湿，饮食渐增清蒸优质蛋白并重启室内微抗阻。",
+                    newPhaseSpec: spec,
+                    remainingSymptoms: [],
+                    cards: [
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "上午 09:30",
+                            title: "炒白术茯苓陈皮温茶",
+                            actionDetail: "茯苓 6g、炒白术 5g、陈皮 3g 煮水焖泡 10 分钟温服，唤醒脾胃运化。",
+                            reasoning: "急症初愈重在健脾渗湿，防止残湿留滞。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "中午 12:00-13:30",
+                            title: "清蒸鲈鱼 + 炒冬瓜 + 半碗杂粮饭",
+                            actionDetail: "\(diningEnv)选清蒸鱼虾 150g 搭配少油冬瓜与软杂粮饭，七分饱停筷。",
+                            reasoning: "逐步恢复优质蛋白，既养脾又不生痰湿。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "fitness",
+                            timeSlot: "下午 17:00-17:30",
+                            title: "居家弹力带划船 + 臀桥(20min)",
+                            actionDetail: "弹力带划船 3×15、自重臀桥 3×15、八段锦收功两遍，微汗即止。",
+                            reasoning: "疏通期以室内低冲击抗阻唤醒代谢，暂不猛练。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "lifestyle",
+                            timeSlot: "晚上 21:30",
+                            title: "顺时针揉腹 + 睡前 2 小时控水",
+                            actionDetail: "仰卧轻柔摩腹 36 圈，21:30 后仅抿口润喉，23:00 前熄灯。",
+                            reasoning: "巩固脾胃夜运，减少晨起肢体沉重感。"
+                        )
+                    ]
+                )
+
+            case .tonifying:
+                let spec = AIRegimenPhasePayload(
+                    stageKind: RegimenStageKind.tonifying.rawValue,
+                    phaseName: "缓调扶正期",
+                    therapeuticPrinciple: "健脾益气、培土制水，稳住肌肉推进减重",
+                    plannedDays: 7,
+                    exitCriteria: "精力充沛、体重稳步回落且大便连续规律",
+                    nextStageHint: "转入「日常顺时固本期」，随节气长周期维护"
+                )
+                return AIPhaseTransitionResponse(
+                    transitionDecision: "advanceToNextStage",
+                    clinicalAssessment: "湿浊大退、脾运恢复，进入「缓调扶正期」治本固脾。",
+                    summary: "全面恢复蛋白与常规运动节奏，重点培补脾气以防痰湿再生。",
+                    newPhaseSpec: spec,
+                    remainingSymptoms: [],
+                    cards: [
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "上午 09:30",
+                            title: "黄芪红枣陈皮益气饮",
+                            actionDetail: "黄芪 5g、去核红枣 2 颗、陈皮 2g 沸水焖泡温饮，补气不腻滞。",
+                            reasoning: "扶正期兼顾轻微气虚，益气健脾防反复。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "中午 12:00-13:30",
+                            title: "芡实莲子瘦肉汤 + 时蔬杂粮",
+                            actionDetail: "瘦肉 150g 炖芡实莲子清汤，搭配绿叶菜与半碗糙米饭。",
+                            reasoning: "健脾固肾、高蛋白低脂，稳步恢复减重缺口。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "fitness",
+                            timeSlot: "下午 16:30-17:20",
+                            title: swimSuitable ? "阳光下室外游泳(35min)" : "居家哑铃复合抗阻(25min)",
+                            actionDetail: swimSuitable
+                                ? "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)，蛙泳 35 分钟并注意上岸保暖。"
+                                : "高脚杯深蹲 3×12、哑铃推举 3×12、划船 3×15，护膝高效燃脂。",
+                            reasoning: swimSuitable
+                                ? "\(snapshot.city) \(tempC)°C 晴暖适宜下水，重启有氧代谢。"
+                                : "结合气象条件在室内保肌减脂，不伤关节。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "lifestyle",
+                            timeSlot: "晚上 21:30",
+                            title: "温水泡脚 + 23:00 前安眠",
+                            actionDetail: "40°C 温水泡脚 12 分钟，放下屏幕保证 7.5 小时高质量睡眠。",
+                            reasoning: "睡眠是最好的扶正之法，稳固脾肾阳气。"
+                        )
+                    ]
+                )
+
+            default:
+                let spec = AIRegimenPhasePayload(
+                    stageKind: RegimenStageKind.maintenance.rawValue,
+                    phaseName: "日常顺时固本期",
+                    therapeuticPrinciple: "健脾化湿、温阳理气，循序渐进减重",
+                    plannedDays: 14,
+                    exitCriteria: "排便成形、晨起轻快不困重且饮食作息平稳",
+                    nextStageHint: "持续顺时固本，随二十四节气微调"
+                )
+                return AIPhaseTransitionResponse(
+                    transitionDecision: "advanceToNextStage",
+                    clinicalAssessment: "本周期调理圆满达标，顺利回归「日常顺时固本期」。",
+                    summary: "已解除阶段限制，恢复贴合\(snapshot.city)实时天气与减重目标的日常顺时计划。",
+                    newPhaseSpec: spec,
+                    remainingSymptoms: [],
+                    cards: [
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "上午 09:30",
+                            title: "生姜陈皮温胃水",
+                            actionDetail: "老姜 2 片 + 5 年陈皮 3g 焖泡 10 分钟温饮。",
+                            reasoning: "回归稳态，\(snapshot.solarTermName)温中理气开启运化。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "diet",
+                            timeSlot: "中午 12:00-13:30",
+                            title: "冬瓜薏米瘦肉温汤 + 杂粮饭",
+                            actionDetail: "\(diningEnv)清淡烹调高蛋白配半碗杂粮饭，细嚼慢咽。",
+                            reasoning: "痰湿质减重期高蛋白低脂，防湿浊积聚。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "fitness",
+                            timeSlot: "下午 16:30-17:30",
+                            title: swimSuitable ? "阳光下室外游泳(限时35min)" : "居家壶铃/弹力带抗阻(25min)",
+                            actionDetail: swimSuitable
+                                ? "中等配速蛙泳/自由泳 35 分钟，避开冷水深潜。"
+                                : "高脚杯深蹲 3×12、弹力带划船 3×15，避开传统跑步。",
+                            reasoning: swimSuitable
+                                ? "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)适宜下水，护膝燃脂。"
+                                : "\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)，室内抗阻更稳妥。"
+                        ),
+                        AIPlannedCardPayload(
+                            category: "lifestyle",
+                            timeSlot: "晚上 21:30",
+                            title: "温水泡脚 + 睡前 2 小时控水",
+                            actionDetail: "40°C 泡脚 15 分钟至微润即止，夜间不大量饮水。",
+                            reasoning: "防夜间水湿停滞，保持次日晨起轻盈。"
+                        )
+                    ]
+                )
+            }
+
+        case .steadyContinue:
+            let spec = AIRegimenPhasePayload(
+                stageKind: currentStage.rawValue,
+                phaseName: snapshot.activePhase?.phaseName ?? currentStage.displayName,
+                therapeuticPrinciple: snapshot.therapeuticPrinciple,
+                plannedDays: (snapshot.activePhase?.plannedDays ?? 3) + 2,
+                exitCriteria: snapshot.activePhase?.exitCriteria ?? "症状完全消退且精神恢复",
+                nextStageHint: snapshot.activePhase?.nextStageHint ?? "待症状稳固后再向下一阶段推进"
+            )
+            return AIPhaseTransitionResponse(
+                transitionDecision: "extendCurrentStage",
+                clinicalAssessment: "「效不更方」：当前方向有效但尚需 2 天巩固，暂不急于增量加压。",
+                summary: "为你顺延当前阶段 2 天，保持温和食养与低负荷导引。",
+                newPhaseSpec: spec,
+                remainingSymptoms: snapshot.userReportedSymptoms,
+                cards: [
+                    AIPlannedCardPayload(
+                        category: "diet",
+                        timeSlot: "上午 09:30",
+                        title: "红枣炒薏米陈皮温饮",
+                        actionDetail: "炒薏米 15g、陈皮 3g、去核红枣 2 颗煮水 15 分钟温服。",
+                        reasoning: "巩固期温和健脾燥湿，兼顾轻微气虚。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "diet",
+                        timeSlot: "中午 12:00-13:30",
+                        title: "猴头菇山药鸡肉温羹",
+                        actionDetail: "山药与嫩鸡肉炖至软烂，少油少盐，配半碗温热米饭。",
+                        reasoning: "继续护养脾胃黏膜，避免过早恢复生冷粗硬。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "fitness",
+                        timeSlot: "下午 17:00-17:25",
+                        title: "八段锦 + 靠墙静蹲(15min)",
+                        actionDetail: "八段锦两遍舒展脾胃，配合靠墙静蹲 3 组 × 45 秒。",
+                        reasoning: "巩固阶段维持温和气血循环，防反复疲劳。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "lifestyle",
+                        timeSlot: "晚上 21:30",
+                        title: "艾草温水泡脚 + 23:00 熄灯",
+                        actionDetail: "温水泡脚 12 分钟后揉腹 36 圈，保证充足睡眠。",
+                        reasoning: "睡眠修复加速残余症状退散。"
+                    )
+                ]
+            )
+
+        case .persistingOrWorse:
+            let noteSnippet = userNote.trimmingCharacters(in: .whitespacesAndNewlines)
+            var updatedSymptoms = snapshot.userReportedSymptoms
+            if !noteSnippet.isEmpty {
+                updatedSymptoms.append(String(noteSnippet.prefix(14)))
+            } else if !updatedSymptoms.contains("症状待进一步观察") {
+                updatedSymptoms.append("症状待进一步观察")
+            }
+
+            let spec = AIRegimenPhasePayload(
+                stageKind: RegimenStageKind.acuteRelief.rawValue,
+                phaseName: "急性护胃重整期",
+                therapeuticPrinciple: "变证易法：彻底清简饮食、停掉负重训练以保脾胃",
+                plannedDays: 3,
+                exitCriteria: "不适感消退、胃腹安和且排便恢复正常",
+                nextStageHint: "若持续超过 3 天未缓解或伴发热剧痛，建议线下就医"
+            )
+            return AIPhaseTransitionResponse(
+                transitionDecision: "adjustPlan",
+                clinicalAssessment: "症状未达预期或有新变化，已切换为更清简的护胃重整方案（如伴高热剧痛请及时就医）。",
+                summary: "进一步简化今日饮食与活动负荷，以流质温粥和静养观察为主。",
+                newPhaseSpec: spec,
+                remainingSymptoms: updatedSymptoms,
+                cards: [
+                    AIPlannedCardPayload(
+                        category: "diet",
+                        timeSlot: "上午 09:30",
+                        title: "焦米陈皮护胃汤（温服）",
+                        actionDetail: "干锅炒香大米 15g 加陈皮 2g 煮汤，只喝温米汤，少量多次啜饮。",
+                        reasoning: "反复不适时以焦米汤收敛护膜，减轻消化压力。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "diet",
+                        timeSlot: "中午 12:00-13:30",
+                        title: "软烂山药小米粥（清淡无油）",
+                        actionDetail: "怀山药蒸熟压泥同小米熬粥，暂撤肉类油脂，七分饱即可。",
+                        reasoning: "暂时减负让脾胃休整，防止食积或寒湿反复。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "fitness",
+                        timeSlot: "下午 17:00",
+                        title: "腹式呼吸静养 + 轻缓散步(10min)",
+                        actionDetail: "暂停抗阻与游泳，室内慢走 10 分钟配合深长腹式呼吸。",
+                        reasoning: "不适期保留气血用于修复，避免运动耗气。"
+                    ),
+                    AIPlannedCardPayload(
+                        category: "lifestyle",
+                        timeSlot: "晚上 21:00",
+                        title: "暖腹热敷 + 早睡观察",
+                        actionDetail: "热敷袋温敷中脘与肚脐 15 分钟，22:30 前入睡并留意次日体温与排便。",
+                        reasoning: "温阳安中并密切观察转归，确保安全底线。"
+                    )
+                ]
+            )
+        }
+    }
 }

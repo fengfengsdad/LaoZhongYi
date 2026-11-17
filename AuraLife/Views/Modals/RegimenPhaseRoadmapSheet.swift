@@ -7,6 +7,7 @@ struct RegimenPhaseRoadmapSheet: View {
 
     let currentPhase: RegimenPhase?
     let referenceDate: Date
+    var onStartFollowUp: (() -> Void)? = nil
 
     private var activePhase: RegimenPhase? {
         currentPhase ?? phases.first(where: { $0.status == .active }) ?? phases.first
@@ -90,6 +91,21 @@ struct RegimenPhaseRoadmapSheet: View {
             Text("开启缘由：\(phase.triggerSummary)（起始于 \(phase.startDate.formatted(date: .abbreviated, time: .omitted))）")
                 .font(.caption2)
                 .foregroundStyle(AuraTheme.secondaryText)
+
+            if let onStartFollowUp {
+                Button {
+                    dismiss()
+                    onStartFollowUp()
+                } label: {
+                    Label("发起阶段复诊 / 评估转段", systemImage: "stethoscope")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(accent, in: Capsule())
+                }
+                .padding(.top, 4)
+            }
         }
         .padding(16)
         .background(AuraTheme.cardSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

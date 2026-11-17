@@ -114,3 +114,16 @@ struct AICardSwapResponse: Codable, Sendable {
         return String(trimmed.prefix(29)) + "…"
     }
 }
+
+struct AIPhaseTransitionResponse: Codable, Sendable {
+    let transitionDecision: String
+    let clinicalAssessment: String
+    let summary: String
+    let newPhaseSpec: AIRegimenPhasePayload
+    let remainingSymptoms: [String]
+    let cards: [AIPlannedCardPayload]
+
+    var isAdvancingStage: Bool {
+        transitionDecision == "advanceToNextStage"
+    }
+}

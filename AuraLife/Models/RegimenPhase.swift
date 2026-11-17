@@ -69,6 +69,17 @@ enum RegimenStageKind: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    var nextTypicalStage: RegimenStageKind {
+        switch self {
+        case .acuteRelief:
+            return .dampnessClearing
+        case .dampnessClearing:
+            return .tonifying
+        case .tonifying, .maintenance:
+            return .maintenance
+        }
+    }
+
     static func infer(from rawOrPhaseName: String) -> RegimenStageKind {
         if let exact = RegimenStageKind(rawValue: rawOrPhaseName) {
             return exact
@@ -103,6 +114,58 @@ enum RegimenPhaseStatus: String, Codable, Sendable {
     }
 }
 
+enum FollowUpOutcome: String, CaseIterable, Identifiable, Sendable {
+    case improved
+    case steadyContinue
+    case persistingOrWorse
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .improved:
+            return "明显好转，可考虑转段"
+        case .steadyContinue:
+            return "略有改善，延续当前调理"
+        case .persistingOrWorse:
+            return "仍有不适或出现新变化"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .improved:
+            return "已接近或达到转段标准，推进至下一调理阶段"
+        case .steadyContinue:
+            return "体感减轻但尚未稳固，延长 1～2 天温和巩固"
+        case .persistingOrWorse:
+            return "症状反复或有新诱因，由 AI 重新评估治法与食谱"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .improved:
+            return "checkmark.seal.fill"
+        case .steadyContinue:
+            return "arrow.clockwise.heart.fill"
+        case .persistingOrWorse:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    var tintColor: Color {
+        switch self {
+        case .improved:
+            return AuraTheme.sageGreen
+        case .steadyContinue:
+            return AuraTheme.inkSlate
+        case .persistingOrWorse:
+            return AuraTheme.warmGinger
+        }
+    }
+}
+
 @Model
 final class RegimenPhase {
     var id: UUID
@@ -115,6 +178,7 @@ final class RegimenPhase {
     var plannedDays: Int
     var statusRawValue: String
     var triggerSummary: String
+    var lastFollowUpDate: Date?
     var updatedAt: Date
 
     var stageKind: RegimenStageKind {
@@ -138,6 +202,7 @@ final class RegimenPhase {
         plannedDays: Int = 14,
         status: RegimenPhaseStatus = .active,
         triggerSummary: String = "基于初始体质画像建立",
+        lastFollowUpDate: Date? = nil,
         updatedAt: Date = .now
     ) {
         self.id = id
@@ -150,6 +215,7 @@ final class RegimenPhase {
         self.plannedDays = max(1, plannedDays)
         self.statusRawValue = status.rawValue
         self.triggerSummary = triggerSummary
+        self.lastFollowUpDate = lastFollowUpDate
         self.updatedAt = updatedAt
     }
 
@@ -176,5 +242,21 @@ final class RegimenPhase {
     func progressFraction(for date: Date = .now) -> Double {
         let currentDay = Double(dayNumber(for: date))
         return min(1.0, max(0.1, currentDay / Double(max(1, plannedDays))))
+    }
+
+    func shouldSuggestFollowUp(on date: Date = .now) -> Bool {
+        let calendar = Calendar.current
+        if let last = lastFollowUpDate, calendar.isDate(last, inSameDayAs: date) {
+            return false
+        }
+        if status == .needsReview {
+            return true
+        }
+        guard status == .active else { return false }
+        let currentDay = dayNumber(for: date)
+        if stageKind == .maintenance {
+            return currentDay >= plannedDays
+        }
+        return currentDay >= min(2, plannedDays)
     }
 }

@@ -35,6 +35,7 @@ struct TodayTimelineView: View {
     @State private var isShowingWeatherContext: Bool = false
     @State private var isShowingNotifications: Bool = false
     @State private var isShowingPhaseRoadmap: Bool = false
+    @State private var isShowingPhaseFollowUp: Bool = false
     @State private var errorAlertMessage: String?
     @State private var toastMessage: String?
 
@@ -111,6 +112,25 @@ struct TodayTimelineView: View {
                                 }
                             }
                         )
+
+                        if selectedDayIndex == 0,
+                           let currentPhase = snapshot.regimenPhase ?? activeRegimenPhase,
+                           currentPhase.shouldSuggestFollowUp(on: snapshot.date) {
+                            PhaseFollowUpBannerCard(
+                                phase: currentPhase,
+                                referenceDate: snapshot.date,
+                                onStartFollowUp: {
+                                    isShowingPhaseFollowUp = true
+                                },
+                                onDismissToday: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        currentPhase.lastFollowUpDate = .now
+                                        try? modelContext.save()
+                                    }
+                                    showToast("今日先按当前方案继续调理")
+                                }
+                            )
+                        }
 
                         VStack(spacing: 16) {
                             ForEach(Array(timelineCards.enumerated()), id: \.element.id) { index, card in
@@ -290,8 +310,36 @@ struct TodayTimelineView: View {
         .sheet(isPresented: $isShowingPhaseRoadmap) {
             RegimenPhaseRoadmapSheet(
                 currentPhase: activeSnapshot?.regimenPhase ?? activeRegimenPhase,
-                referenceDate: activeSnapshot?.date ?? .now
+                referenceDate: activeSnapshot?.date ?? .now,
+                onStartFollowUp: {
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(250))
+                        await MainActor.run {
+                            isShowingPhaseFollowUp = true
+                        }
+                    }
+                }
             )
+        }
+        .sheet(isPresented: $isShowingPhaseFollowUp) {
+            if let snapshot = activeSnapshot,
+               let currentPhase = snapshot.regimenPhase ?? activeRegimenPhase {
+                PhaseFollowUpSheet(
+                    currentPhase: currentPhase,
+                    snapshot: snapshot,
+                    profile: activeProfile,
+                    onApplyTransition: { outcome, note, response, source in
+                        applyPhaseTransition(
+                            currentPhase: currentPhase,
+                            snapshot: snapshot,
+                            outcome: outcome,
+                            userNote: note,
+                            response: response,
+                            source: source
+                        )
+                    }
+                )
+            }
         }
         .alert("AI 请求未成功", isPresented: Binding(
             get: { errorAlertMessage != nil },
@@ -810,6 +858,91 @@ struct TodayTimelineView: View {
         )
         modelContext.insert(created)
         return created
+    }
+
+    private func applyPhaseTransition(
+        currentPhase: RegimenPhase,
+        snapshot: DailyContextSnapshot,
+        outcome: FollowUpOutcome,
+        userNote: String,
+        response: AIPhaseTransitionResponse,
+        source: AIServiceSource
+    ) {
+        let baseDay = Calendar.current.startOfDay(for: snapshot.date)
+
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.85)) {
+            let targetPhase: RegimenPhase
+            if response.transitionDecision == "extendCurrentStage" {
+                currentPhase.therapeuticPrinciple = response.newPhaseSpec.therapeuticPrinciple
+                currentPhase.exitCriteria = response.newPhaseSpec.exitCriteria
+                currentPhase.nextStageHint = response.newPhaseSpec.nextStageHint
+                currentPhase.plannedDays = max(currentPhase.plannedDays, response.newPhaseSpec.normalizedPlannedDays)
+                currentPhase.status = .active
+                currentPhase.lastFollowUpDate = .now
+                currentPhase.updatedAt = .now
+                targetPhase = currentPhase
+            } else {
+                currentPhase.status = .completed
+                currentPhase.lastFollowUpDate = .now
+                currentPhase.updatedAt = .now
+
+                let newPhase = RegimenPhase(
+                    stageKind: response.newPhaseSpec.resolvedStageKind,
+                    phaseName: response.newPhaseSpec.phaseName,
+                    therapeuticPrinciple: response.newPhaseSpec.therapeuticPrinciple,
+                    exitCriteria: response.newPhaseSpec.exitCriteria,
+                    nextStageHint: response.newPhaseSpec.nextStageHint,
+                    startDate: baseDay,
+                    plannedDays: response.newPhaseSpec.normalizedPlannedDays,
+                    status: .active,
+                    triggerSummary: "复诊评估（\(outcome.title)）"
+                )
+                modelContext.insert(newPhase)
+                targetPhase = newPhase
+            }
+
+            snapshot.regimenPhase = targetPhase
+            snapshot.therapeuticPrinciple = targetPhase.therapeuticPrinciple
+            snapshot.recoveryPhase = targetPhase.badgeText(for: snapshot.date)
+            snapshot.userReportedSymptoms = response.remainingSymptoms
+
+            for existingCard in snapshot.actionCards {
+                modelContext.delete(existingCard)
+            }
+            snapshot.actionCards.removeAll()
+
+            var newCards: [ActionCard] = []
+            for (index, payload) in response.cards.enumerated() {
+                let card = ActionCard(
+                    category: payload.resolvedCategory,
+                    timeSlot: payload.timeSlot,
+                    title: payload.title,
+                    actionDetail: payload.actionDetail,
+                    reasoning: payload.clampedReasoning,
+                    isCompleted: false,
+                    sortOrder: index,
+                    snapshot: snapshot
+                )
+                modelContext.insert(card)
+                newCards.append(card)
+            }
+            snapshot.actionCards = newCards
+
+            let noteSuffix = userNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : " · \(userNote)"
+            let log = ChatAdjustmentLog(
+                userInput: "阶段复诊：\(outcome.title)\(noteSuffix)",
+                aiSummary: "[\(source.rawValue)] \(response.clinicalAssessment)",
+                affectedCardTitles: newCards.map(\.title),
+                wasApplied: true
+            )
+            modelContext.insert(log)
+            try? modelContext.save()
+        }
+
+        showToast("已完成复诊转段，进入「\(response.newPhaseSpec.phaseName)」")
+        Task {
+            _ = await syncGentleNotifications()
+        }
     }
 
     private func upsertActivePhase(

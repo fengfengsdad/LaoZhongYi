@@ -2,6 +2,23 @@ import Foundation
 
 // MARK: - Structured Outputs Swift Models (Strict JSON Schema Decodable)
 
+struct AIRegimenPhasePayload: Codable, Sendable {
+    let stageKind: String
+    let phaseName: String
+    let therapeuticPrinciple: String
+    let plannedDays: Int
+    let exitCriteria: String
+    let nextStageHint: String
+
+    var resolvedStageKind: RegimenStageKind {
+        RegimenStageKind.infer(from: stageKind)
+    }
+
+    var normalizedPlannedDays: Int {
+        max(1, min(30, plannedDays))
+    }
+}
+
 struct AIPlannedCardPayload: Codable, Sendable {
     let category: String
     let timeSlot: String
@@ -31,6 +48,7 @@ struct AIDayPlanPayload: Codable, Sendable {
 
 struct AIMultiDayPlanResponse: Codable, Sendable {
     let summary: String
+    let phaseSpec: AIRegimenPhasePayload
     let days: [AIDayPlanPayload]
 }
 
@@ -58,6 +76,7 @@ struct AICardDiffPayload: Codable, Sendable {
 
 struct AIAdjustmentResponse: Codable, Sendable {
     let proposedPhase: String
+    let phaseSpec: AIRegimenPhasePayload
     let detectedSymptoms: [String]
     let summary: String
     let diffs: [AICardDiffPayload]

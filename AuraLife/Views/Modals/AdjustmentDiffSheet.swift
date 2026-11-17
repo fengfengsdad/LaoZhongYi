@@ -6,6 +6,10 @@ struct AdjustmentDiffSheet: View {
     let onApply: () -> Void
     let onCancel: () -> Void
 
+    private var stageKind: RegimenStageKind {
+        proposal.phaseSpec.resolvedStageKind
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -37,16 +41,30 @@ struct AdjustmentDiffSheet: View {
                             .background(AuraTheme.subtleSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                         HStack(spacing: 6) {
-                            Text("判定阶段：")
-                                .font(.caption)
-                                .foregroundStyle(AuraTheme.secondaryText)
-                            Text(proposal.proposedPhase)
+                            Label(stageKind.displayName, systemImage: stageKind.systemImage)
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(AuraTheme.warmGinger)
+                                .foregroundStyle(stageKind.accentColor)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(AuraTheme.warmGinger.opacity(0.14), in: Capsule())
+                                .background(stageKind.accentColor.opacity(0.14), in: Capsule())
+
+                            Text("\(proposal.phaseSpec.phaseName) · 预计 \(proposal.phaseSpec.normalizedPlannedDays) 天")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(AuraTheme.primaryText)
                         }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("治法总则：\(proposal.phaseSpec.therapeuticPrinciple)")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(AuraTheme.primaryText)
+
+                            Text("转段标准：\(proposal.phaseSpec.exitCriteria)")
+                                .font(.caption2)
+                                .foregroundStyle(AuraTheme.secondaryText)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AuraTheme.subtleSurface.opacity(0.75), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                         Text(proposal.summary)
                             .font(.footnote)

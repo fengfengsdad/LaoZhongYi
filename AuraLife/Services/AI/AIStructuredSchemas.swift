@@ -9,12 +9,13 @@ enum AIStructuredSchemas {
         [
             "type": "object",
             "additionalProperties": false,
-            "required": ["summary", "days"],
+            "required": ["summary", "phaseSpec", "days"],
             "properties": [
                 "summary": [
                     "type": "string",
                     "description": "多日动态规划总览说明，不超过60字"
                 ],
+                "phaseSpec": phaseSpecSchema,
                 "days": [
                     "type": "array",
                     "minItems": 1,
@@ -30,7 +31,7 @@ enum AIStructuredSchemas {
                             ],
                             "recoveryPhase": [
                                 "type": "string",
-                                "description": "例如：急性祛湿恢复期 (第1/3天) 或 日常稳态调理期"
+                                "description": "例如：急性祛湿恢复期 (第1/3天) 或 日常顺时固本期 (第1天)"
                             ],
                             "detectedSymptoms": [
                                 "type": "array",
@@ -53,12 +54,13 @@ enum AIStructuredSchemas {
         [
             "type": "object",
             "additionalProperties": false,
-            "required": ["proposedPhase", "detectedSymptoms", "summary", "diffs"],
+            "required": ["proposedPhase", "phaseSpec", "detectedSymptoms", "summary", "diffs"],
             "properties": [
                 "proposedPhase": [
                     "type": "string",
-                    "description": "例如：急性祛湿恢复期 (第1/3天) 或 日常稳态调理期"
+                    "description": "例如：急性祛湿恢复期 (第1/3天) 或 日常顺时固本期"
                 ],
+                "phaseSpec": phaseSpecSchema,
                 "detectedSymptoms": [
                     "type": "array",
                     "items": ["type": "string"]
@@ -127,6 +129,48 @@ enum AIStructuredSchemas {
                 "reasoning": [
                     "type": "string",
                     "description": "不超过30字的大白话解释，说明结合了哪项体质特征或天气因素"
+                ]
+            ]
+        ]
+    }
+
+    private static var phaseSpecSchema: [String: Any] {
+        [
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "stageKind",
+                "phaseName",
+                "therapeuticPrinciple",
+                "plannedDays",
+                "exitCriteria",
+                "nextStageHint"
+            ],
+            "properties": [
+                "stageKind": [
+                    "type": "string",
+                    "enum": ["acuteRelief", "dampnessClearing", "tonifying", "maintenance"],
+                    "description": "acuteRelief=急症治标期，dampnessClearing=祛邪疏通期，tonifying=缓调扶正期，maintenance=顺时固本期"
+                ],
+                "phaseName": [
+                    "type": "string",
+                    "description": "阶段名称，例如：急性祛湿恢复期 或 日常顺时固本期"
+                ],
+                "therapeuticPrinciple": [
+                    "type": "string",
+                    "description": "中医治法总则，如：温中散寒、先护胃气，暂缓减重与生冷（10~28字）"
+                ],
+                "plannedDays": [
+                    "type": "integer",
+                    "description": "本阶段预计持续天数，急症治标期一般为2-3天，祛邪疏通期3-5天，稳态固本期7-14天"
+                ],
+                "exitCriteria": [
+                    "type": "string",
+                    "description": "可感知的转段判断标准，如：排便成形、胃脘暖和且晨起不困重"
+                ],
+                "nextStageHint": [
+                    "type": "string",
+                    "description": "达标后的下一调理阶段，如：转入祛邪疏通期，逐步恢复高蛋白与抗阻"
                 ]
             ]
         ]

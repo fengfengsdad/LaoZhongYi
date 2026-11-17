@@ -1,0 +1,18 @@
+---
+description: Git 分支开发流与 CHANGELOG 维护规范
+alwaysApply: true
+---
+
+# Git Workflow & Changelog Rules
+
+1. **分支隔离 (Branching)**:
+   - 日常开发（如 Phase 5～8 功能迭代与修复）统一在 `develop` 分支进行，禁止将未验证的中间阶段直接推送到 `main`。
+   - 仅当阶段里程碑验证通过准备发版时，再合并回 `main`。
+
+2. **CHANGELOG 维护**:
+   - 每次完成一个 Phase 或重要功能/修复提交前，必须同步更新根目录 `CHANGELOG.md`。
+   - 新开发内容统一归入 `## [Unreleased] - develop`，按 Keep a Changelog 分类（`Added` / `Changed` / `Fixed`）。
+   - 合并至 `main` 发版时，将 `[Unreleased]` 整理为对应版本号与日期（如 `## [0.2.0] - YYYY-MM-DD`）。
+
+3. **提交前检查**:
+   - 确保 `xcodebuild` 编译通过、不提交密钥或 `.DS_Store`/`xcuserdata` 等本地产物。

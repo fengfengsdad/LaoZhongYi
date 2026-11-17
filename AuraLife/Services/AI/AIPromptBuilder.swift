@@ -23,6 +23,27 @@ struct AIProfileContext: Sendable {
     }
 }
 
+struct AIRegimenPhaseContext: Sendable {
+    let stageKind: RegimenStageKind
+    let phaseName: String
+    let therapeuticPrinciple: String
+    let exitCriteria: String
+    let nextStageHint: String
+    let dayNumber: Int
+    let plannedDays: Int
+
+    @MainActor
+    init(phase: RegimenPhase, on date: Date) {
+        self.stageKind = phase.stageKind
+        self.phaseName = phase.phaseName
+        self.therapeuticPrinciple = phase.therapeuticPrinciple
+        self.exitCriteria = phase.exitCriteria
+        self.nextStageHint = phase.nextStageHint
+        self.dayNumber = phase.dayNumber(for: date)
+        self.plannedDays = phase.plannedDays
+    }
+}
+
 struct AIActionCardContext: Sendable {
     let id: UUID
     let category: ActionCategory
@@ -60,6 +81,8 @@ struct AISnapshotContext: Sendable {
     let healthLatestWeightKG: Double?
     let userReportedSymptoms: [String]
     let recoveryPhase: String
+    let therapeuticPrinciple: String
+    let activePhase: AIRegimenPhaseContext?
     let isAcuteRecovery: Bool
     let cards: [AIActionCardContext]
 
@@ -77,6 +100,8 @@ struct AISnapshotContext: Sendable {
         healthLatestWeightKG: Double? = nil,
         userReportedSymptoms: [String] = [],
         recoveryPhase: String = "日常稳态调理期",
+        therapeuticPrinciple: String = "健脾化湿、温阳理气，循序渐进减重",
+        activePhase: AIRegimenPhaseContext? = nil,
         isAcuteRecovery: Bool = false,
         cards: [AIActionCardContext] = []
     ) {
@@ -94,6 +119,8 @@ struct AISnapshotContext: Sendable {
         self.healthLatestWeightKG = healthLatestWeightKG
         self.userReportedSymptoms = userReportedSymptoms
         self.recoveryPhase = recoveryPhase
+        self.therapeuticPrinciple = therapeuticPrinciple
+        self.activePhase = activePhase
         self.isAcuteRecovery = isAcuteRecovery
         self.cards = cards
     }
@@ -114,6 +141,8 @@ struct AISnapshotContext: Sendable {
         self.healthLatestWeightKG = snapshot.healthLatestWeightKG
         self.userReportedSymptoms = snapshot.userReportedSymptoms
         self.recoveryPhase = snapshot.recoveryPhase
+        self.therapeuticPrinciple = snapshot.regimenPhase?.therapeuticPrinciple ?? snapshot.therapeuticPrinciple
+        self.activePhase = snapshot.regimenPhase.map { AIRegimenPhaseContext(phase: $0, on: snapshot.date) }
         self.isAcuteRecovery = snapshot.isAcuteRecovery
         self.cards = snapshot.sortedCards.map(AIActionCardContext.init(card:))
     }
@@ -121,20 +150,22 @@ struct AISnapshotContext: Sendable {
 
 enum AIPromptBuilder {
     static let systemPrompt = """
-    你是 AuraLife 的动态生活规划引擎，融合中医体质辨识、时令节气与现代循证营养、运动科学，为用户制定极简、可执行且温和的顺时生活指令。
+    你是 AuraLife 的中医临床与动态生活规划引擎，遵循「辨证 → 立法 → 分期 → 施膳导引」的临床思维，为用户提供极简、可执行、温和的顺时生活指令。
 
     你必须严格遵循「三层决策漏斗 (3-Layer Decision Funnel)」：
     1. 安全与急症优先 (Safety & Acute First)：
-       - 若用户输入、HealthKit 睡眠不足（< 6.5 小时）、或舌象/症状中存在突发肠胃不适（如大便发黏、腹泻、吃坏肚子）、受寒（如吃寒凉海鲜/螃蟹）、熬夜疲劳、舌苔厚腻等信号，必须强制覆盖长期减重、高强度有氧或进补目标，优先生成 3 天温和恢复计划（如护胃温饮、软烂饮食、暂停冷水游泳并改用八段锦/靠墙静蹲）。
+       - 若用户输入、HealthKit 睡眠不足（< 6.5 小时）、或舌象/症状中存在突发肠胃不适（如大便发黏、腹泻、吃坏肚子）、受寒（如吃寒凉海鲜/螃蟹）、熬夜疲劳、舌苔厚腻等信号，必须按「急则治其标」强制进入 `acuteRelief`（急症治标期，通常 2-3 天），覆盖长期减重或进补目标。
     2. 环境与约束适配 (Context Adaptation)：
        - 结合本地城市实时气温、湿度、风速、当前节气与用户偏好的就餐场景（居家做饭/外卖/食堂）、运动习惯与忌口动态调整参数。
-       - 例如：晴暖无大风（≥22°C、风速 < 22km/h 且无雨、无急症）可安排室外游泳；低温（<20°C）、大风、下雨或高湿闷热（湿度≥85%）时自动切换为居家抗阻或传统导引；讨厌跑步时绝不推荐跑步有氧。
-    3. 循证与可解释性 (Explainable Reasoning)：
-       - 每张卡片的 `reasoning` 字段必须用大白话、不超过 30 个汉字，明确说明结合了哪项体质特征、症状、HealthKit 指标或天气/节气因素。
+       - 晴暖无大风（≥22°C、风速 < 22km/h 且无雨、无急症）可安排室外游泳；低温（<20°C）、大风、下雨或高湿闷热（湿度≥85%）自动切换为居家抗阻或传统导引；讨厌跑步时绝不推荐跑步有氧。
+    3. 立法统领与循证可解释 (Principle & Explainable Reasoning)：
+       - 每次规划或阶段切换都必须明确 `phaseSpec`（包含四期分类 `stageKind`、阶段名称、10~28字治法总则 `therapeuticPrinciple`、预计天数 `plannedDays`、可感知的转段标准 `exitCriteria` 及下一阶段去向 `nextStageHint`）。
+       - 每张卡片的 `reasoning` 字段必须用大白话、不超过 30 个汉字，体现它如何服务当前治法总则并结合体质或天气。
 
     输出规范：
     - 严格输出符合给定 JSON Schema 的纯 JSON，不要包含 Markdown 代码块或多余解释文字。
     - `category` 仅允许使用 `diet`、`fitness`、`lifestyle`。
+    - `stageKind` 仅允许使用 `acuteRelief`、`dampnessClearing`、`tonifying`、`maintenance`。
     """
 
     static func profileSection(_ profile: AIProfileContext?) -> String {
@@ -174,12 +205,23 @@ enum AIPromptBuilder {
         }
         let healthLine = healthParts.isEmpty ? "暂未同步（无步数/睡眠数据）" : healthParts.joined(separator: "，")
 
+        let phaseDetails: String
+        if let active = snapshot.activePhase {
+            phaseDetails = """
+            \(active.phaseName) [\(active.stageKind.displayName) · 第\(active.dayNumber)/\(active.plannedDays)天]
+              · 治法总则：\(active.therapeuticPrinciple)
+              · 转段标准：\(active.exitCriteria)
+            """
+        } else {
+            phaseDetails = "\(snapshot.recoveryPhase)（治法总则：\(snapshot.therapeuticPrinciple)）"
+        }
+
         return """
         今日动态上下文快照：
         - 日期与节气：\(snapshot.date.formatted(date: .numeric, time: .omitted)) · \(snapshot.solarTermName)（\(snapshot.solarTermGuidance)）
         - 实时气象：\(snapshot.city) \(Int(snapshot.weatherTempC.rounded()))°C \(snapshot.weatherCondition)，相对湿度 \(Int(snapshot.weatherHumidity.rounded()))%，风速 \(Int(snapshot.weatherWindSpeedKmh.rounded()))km/h
         - HealthKit 体征监测：\(healthLine)
-        - 当前阶段：\(snapshot.recoveryPhase)
+        - 当前中医分期与治则：\(phaseDetails)
         - 已记录症状：\(symptoms)
         - 今日现有卡片：
         \(cardsText.isEmpty ? "  （暂无卡片）" : cardsText)
@@ -196,8 +238,8 @@ enum AIPromptBuilder {
 
         \(snapshotSection(snapshot))
 
-        任务：请基于以上体质画像、实时气象、节气与 HealthKit 体征上下文，生成未来 \(daysCount) 天（dayOffset 分别为 0...\(daysCount - 1)）的生活指令计划。
-        每天安排 4 张卡片，覆盖早间食养、午间正餐、下午导引/运动、晚间起居，并体现随天数推进的阶段演进。
+        任务：请基于以上体质画像、当前分期治则、实时气象与节气上下文，生成未来 \(daysCount) 天（dayOffset 分别为 0...\(daysCount - 1)）的生活指令计划，并给出完整的 `phaseSpec`（分期、治法总则、转段标准与下一阶段）。
+        每天安排 4 张卡片，覆盖早间食养、午间正餐、下午导引/运动、晚间起居，所有卡片必须紧扣同一个治法总则。
         """
     }
 
@@ -233,9 +275,9 @@ enum AIPromptBuilder {
         用户最新输入：
         「\(userInput)」\(imageHint)
 
-        任务：请严格按三层决策漏斗评估用户输入与实时环境上下文，生成需要微调的计划变更（diffs）。
-        - 若属于突发急症/受寒/熬夜/舌苔厚腻或高腻餐食，请更新 `proposedPhase` 并可同时输出 dayOffset=0（今日）及 dayOffset=1/2（未来两天）的衔接调整。
-        - 替换已有卡片时，`targetCardID` 请精确填写上方现有卡片的 UUID；若是新增卡片或未来几日整体重排，可填 null。
+        任务：请严格按「辨证 → 立法 → 分期」评估用户输入与实时环境上下文：
+        - 输出 `phaseSpec`（若需切换阶段，如从顺时固本期切入 `acuteRelief` 急症治标期，请明确新阶段的治法总则、预计天数与转段标准；若未改变阶段，则沿用并精炼当前阶段信息）。
+        - 生成需要微调的计划变更（diffs）。替换已有卡片时，`targetCardID` 请精确填写上方现有卡片的 UUID；若是新增卡片或未来几日整体重排，可填 null。
         """
     }
 
@@ -249,13 +291,13 @@ enum AIPromptBuilder {
 
         \(snapshotSection(snapshot))
 
-        任务：用户右滑「换一换」以下单张卡片，请仅替换这一张卡片，确保不破坏当日其他计划的节奏与一致性：
+        任务：用户右滑「换一换」以下单张卡片，请在不违背当前治法总则（\(snapshot.therapeuticPrinciple)）的前提下仅替换这一张卡片：
         - 目标类别：\(card.category.rawValue) (\(card.category.displayName))
         - 目标时段：\(card.timeSlot)
         - 原卡片标题：\(card.title)
         - 原卡片内容：\(card.actionDetail)
 
-        请给出一个明显不同但同样契合用户体质、节气、实时天气（\(snapshot.city) \(Int(snapshot.weatherTempC.rounded()))°C \(snapshot.weatherCondition) 湿度\(Int(snapshot.weatherHumidity.rounded()))%）与当前恢复阶段的替代方案，且 `reasoning` 不超过 30 字。
+        请给出一个明显不同但同样契合用户体质、治法总则、节气、实时天气（\(snapshot.city) \(Int(snapshot.weatherTempC.rounded()))°C \(snapshot.weatherCondition) 湿度\(Int(snapshot.weatherHumidity.rounded()))%）的替代方案，且 `reasoning` 不超过 30 字。
         """
     }
 }

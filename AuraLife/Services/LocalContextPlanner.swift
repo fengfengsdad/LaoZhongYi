@@ -31,6 +31,7 @@ struct AdjustmentProposal: Identifiable, Sendable {
     let userInput: String
     let detectedSymptoms: [String]
     let proposedPhase: String
+    let phaseSpec: AIRegimenPhasePayload
     let summary: String
     let source: AIServiceSource
     let diffs: [CardAdjustmentDiff]
@@ -79,6 +80,7 @@ enum LocalContextPlanner {
             userInput: userInput,
             detectedSymptoms: response.detectedSymptoms,
             proposedPhase: response.proposedPhase,
+            phaseSpec: response.phaseSpec,
             summary: response.summary,
             source: source,
             diffs: mappedDiffs
@@ -142,6 +144,15 @@ enum LocalContextPlanner {
             }
         }
 
+        let defaultPhaseSpec = AIRegimenPhasePayload(
+            stageKind: snapshot.activePhase?.stageKind.rawValue ?? RegimenStageKind.maintenance.rawValue,
+            phaseName: snapshot.activePhase?.phaseName ?? "日常顺时固本期",
+            therapeuticPrinciple: snapshot.therapeuticPrinciple,
+            plannedDays: snapshot.activePhase?.plannedDays ?? 14,
+            exitCriteria: snapshot.activePhase?.exitCriteria ?? "排便成形、晨起轻快不困重且饮食作息平稳",
+            nextStageHint: snapshot.activePhase?.nextStageHint ?? "持续顺时固本，随二十四节气微调"
+        )
+
         let existingCards = snapshot.cards
         var diffs: [CardAdjustmentDiff] = []
 
@@ -177,11 +188,20 @@ enum LocalContextPlanner {
                     )
                 )
             }
+            let clearingSpec = AIRegimenPhasePayload(
+                stageKind: RegimenStageKind.dampnessClearing.rawValue,
+                phaseName: "轻消导祛湿期",
+                therapeuticPrinciple: "消食导滞、清化痰湿，餐后温和助运",
+                plannedDays: 2,
+                exitCriteria: "餐后无腹胀饱滞、次日晨起舌苔清爽",
+                nextStageHint: "转回「日常顺时固本期」继续常规调理"
+            )
             return AdjustmentProposal(
                 userInput: effectiveInput,
                 detectedSymptoms: symptoms,
-                proposedPhase: snapshot.recoveryPhase,
-                summary: "已结合餐食照片及本地\(snapshot.city) \(Int(snapshot.weatherTempC.rounded()))°C 气象条件微调后续饮食与餐后活动。",
+                proposedPhase: "\(clearingSpec.phaseName) (第1/2天)",
+                phaseSpec: clearingSpec,
+                summary: "已结合餐食照片及\(snapshot.city) \(Int(snapshot.weatherTempC.rounded()))°C 气象条件切换为轻消导方案。",
                 source: .offlineDemo,
                 diffs: diffs
             )
@@ -189,7 +209,15 @@ enum LocalContextPlanner {
 
         // Layer 1: 安全与急症优先
         if isAcute {
-            let phase = "急性祛湿恢复期 (第1/3天)"
+            let acuteSpec = AIRegimenPhasePayload(
+                stageKind: RegimenStageKind.acuteRelief.rawValue,
+                phaseName: "急性祛湿恢复期",
+                therapeuticPrinciple: "温中散寒、先护胃气，暂缓减重与生冷",
+                plannedDays: 3,
+                exitCriteria: "排便成形不黏腻、胃脘温暖无胀闷且精神恢复",
+                nextStageHint: "转入「祛邪疏通期」，逐步恢复蛋白与微抗阻"
+            )
+            let phase = "\(acuteSpec.phaseName) (第1/3天)"
 
             if let dietMorning = existingCards.first(where: { $0.category == .diet && $0.sortOrder == 0 }) {
                 diffs.append(
@@ -243,7 +271,8 @@ enum LocalContextPlanner {
                 userInput: effectiveInput,
                 detectedSymptoms: symptoms,
                 proposedPhase: phase,
-                summary: "识别到短期脾胃受寒、疲劳或舌苔信号，已触发「安全与急症优先」策略，暂缓冷湿运动并调整饮食。",
+                phaseSpec: acuteSpec,
+                summary: "识别到短期脾胃受寒、疲劳或舌苔信号，已按「急则治其标」切换至 3 天温和恢复期。",
                 source: .offlineDemo,
                 diffs: diffs
             )
@@ -296,10 +325,20 @@ enum LocalContextPlanner {
                 )
             }
 
+            let weatherSpec = AIRegimenPhasePayload(
+                stageKind: humidity >= 80 ? RegimenStageKind.dampnessClearing.rawValue : defaultPhaseSpec.stageKind,
+                phaseName: humidity >= 80 ? "祛湿避寒顺时期" : defaultPhaseSpec.phaseName,
+                therapeuticPrinciple: humidity >= 80 ? "健脾利湿、防外湿引动内湿，转入室内导引" : "顺应天时、避风寒护阳，保持轻度抗阻代谢",
+                plannedDays: defaultPhaseSpec.plannedDays,
+                exitCriteria: defaultPhaseSpec.exitCriteria,
+                nextStageHint: defaultPhaseSpec.nextStageHint
+            )
+
             return AdjustmentProposal(
                 userInput: effectiveInput,
                 detectedSymptoms: symptoms,
-                proposedPhase: snapshot.recoveryPhase,
+                proposedPhase: weatherSpec.phaseName,
+                phaseSpec: weatherSpec,
                 summary: "已结合\(snapshot.city) \(tempC)°C \(snapshot.weatherCondition)（湿度 \(humidity)%）与\(snapshot.solarTermName)节气重新适配今日运动与食养。",
                 source: .offlineDemo,
                 diffs: diffs
@@ -331,6 +370,7 @@ enum LocalContextPlanner {
                 userInput: effectiveInput,
                 detectedSymptoms: symptoms,
                 proposedPhase: snapshot.recoveryPhase,
+                phaseSpec: defaultPhaseSpec,
                 summary: "已依据你的即时运动偏好与减重保肌目标，将今日训练切换为居家轻量抗阻。",
                 source: .offlineDemo,
                 diffs: diffs
@@ -363,13 +403,15 @@ enum LocalContextPlanner {
             userInput: effectiveInput,
             detectedSymptoms: symptoms,
             proposedPhase: snapshot.recoveryPhase,
+            phaseSpec: defaultPhaseSpec,
             summary: "已记录你今天的状态反馈，并结合\(snapshot.city) \(tempC)°C 天气做了温和微调。",
             source: .offlineDemo,
             diffs: diffs
         )
     }
 
-    @MainActor static func proposeAdjustment(
+    @MainActor
+    static func proposeAdjustment(
         input: String,
         hasAttachedImage: Bool,
         profile: UserConstitutionProfile?,

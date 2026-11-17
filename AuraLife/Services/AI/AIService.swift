@@ -935,10 +935,32 @@ actor AIService {
             }
         }
 
+        let phaseSpec: AIRegimenPhasePayload
+        if isAcute {
+            phaseSpec = AIRegimenPhasePayload(
+                stageKind: RegimenStageKind.acuteRelief.rawValue,
+                phaseName: "急性祛湿恢复期",
+                therapeuticPrinciple: "温中散寒、先护胃气，暂缓减重与生冷",
+                plannedDays: 3,
+                exitCriteria: "排便成形不黏腻、胃脘温暖无胀闷",
+                nextStageHint: "转入「祛邪疏通期」，逐步恢复蛋白与抗阻"
+            )
+        } else {
+            phaseSpec = AIRegimenPhasePayload(
+                stageKind: RegimenStageKind.maintenance.rawValue,
+                phaseName: "日常顺时固本期",
+                therapeuticPrinciple: "健脾化湿、温阳理气，循序渐进减重",
+                plannedDays: 14,
+                exitCriteria: "排便成形、晨起轻快不困重且作息平稳",
+                nextStageHint: "持续顺时固本，随二十四节气微调"
+            )
+        }
+
         return AIMultiDayPlanResponse(
             summary: isAcute
-                ? "已按「安全与急症优先」生成未来 \(dayTemplates.count) 天阶梯式温和恢复方案。"
+                ? "已按「急则治其标」生成未来 \(dayTemplates.count) 天阶梯式温和恢复方案。"
                 : "已结合痰湿质画像与 \(snapshot.city) \(tempC)°C 天气生成未来 \(dayTemplates.count) 天顺时方案。",
+            phaseSpec: phaseSpec,
             days: dayTemplates
         )
     }
@@ -988,6 +1010,7 @@ actor AIService {
 
         return AIAdjustmentResponse(
             proposedPhase: local.proposedPhase,
+            phaseSpec: local.phaseSpec,
             detectedSymptoms: local.detectedSymptoms,
             summary: local.summary,
             diffs: diffs

@@ -5,12 +5,14 @@ struct RecoveryBannerView: View {
     let snapshot: DailyContextSnapshot
     let dayTitle: String
     let profile: UserConstitutionProfile?
+    let activePhase: RegimenPhase?
     let completedCount: Int
     let totalCount: Int
     let isGeneratingMultiDay: Bool
     let isAILiveConfigured: Bool
     let isNotificationsEnabled: Bool
     let onTapWeatherContext: () -> Void
+    let onTapPhaseRoadmap: () -> Void
     let onTapNotifications: () -> Void
     let onTapProfile: () -> Void
     let onTapHistory: () -> Void
@@ -24,8 +26,26 @@ struct RecoveryBannerView: View {
         return formatter.string(from: snapshot.date)
     }
 
+    private var resolvedPhase: RegimenPhase? {
+        snapshot.regimenPhase ?? activePhase
+    }
+
+    private var phaseBadgeLabel: String {
+        if let phase = resolvedPhase {
+            return phase.badgeText(for: snapshot.date)
+        }
+        return snapshot.recoveryPhase
+    }
+
+    private var phasePrincipleLabel: String {
+        resolvedPhase?.therapeuticPrinciple ?? snapshot.therapeuticPrinciple
+    }
+
     private var phaseColor: Color {
-        snapshot.isAcuteRecovery ? AuraTheme.warmGinger : AuraTheme.sageGreen
+        if let phase = resolvedPhase {
+            return phase.stageKind.accentColor
+        }
+        return snapshot.isAcuteRecovery ? AuraTheme.warmGinger : AuraTheme.sageGreen
     }
 
     private var weatherSymbol: String {
@@ -38,7 +58,7 @@ struct RecoveryBannerView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(dateText) · \(snapshot.resolvedSolarTerm.name)")
@@ -115,18 +135,25 @@ struct RecoveryBannerView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("查看或切换天气、节气与 HealthKit 上下文")
 
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(phaseColor)
-                        .frame(width: 6, height: 6)
-                    Text(snapshot.recoveryPhase)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(phaseColor)
-                        .lineLimit(1)
+                Button(action: onTapPhaseRoadmap) {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(phaseColor)
+                            .frame(width: 6, height: 6)
+                        Text(phaseBadgeLabel)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(phaseColor)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(phaseColor.opacity(0.75))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(phaseColor.opacity(0.12), in: Capsule())
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(phaseColor.opacity(0.12), in: Capsule())
+                .buttonStyle(.plain)
+                .accessibilityLabel("查看中医分期与治法路线")
 
                 Spacer(minLength: 0)
 
@@ -134,6 +161,28 @@ struct RecoveryBannerView: View {
                     .font(.caption.monospacedDigit().weight(.medium))
                     .foregroundStyle(AuraTheme.secondaryText)
             }
+
+            Button(action: onTapPhaseRoadmap) {
+                HStack(alignment: .center, spacing: 6) {
+                    Text("治则")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(phaseColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(phaseColor.opacity(0.12), in: Capsule())
+
+                    Text(phasePrincipleLabel)
+                        .font(.caption)
+                        .foregroundStyle(AuraTheme.primaryText.opacity(0.86))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(AuraTheme.subtleSurface.opacity(0.75), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .buttonStyle(.plain)
 
             HStack(spacing: 10) {
                 if !snapshot.userReportedSymptoms.isEmpty {
@@ -213,6 +262,7 @@ struct RecoveryBannerView: View {
     let container = PreviewSupport.makeContainer()
     let snapshots = (try? container.mainContext.fetch(FetchDescriptor<DailyContextSnapshot>())) ?? []
     let profiles = (try? container.mainContext.fetch(FetchDescriptor<UserConstitutionProfile>())) ?? []
+    let phases = (try? container.mainContext.fetch(FetchDescriptor<RegimenPhase>())) ?? []
 
     return ZStack {
         AuraTheme.canvasBackground.ignoresSafeArea()
@@ -221,12 +271,14 @@ struct RecoveryBannerView: View {
                 snapshot: snapshot,
                 dayTitle: "今日顺时调理",
                 profile: profiles.first,
+                activePhase: phases.first,
                 completedCount: 1,
                 totalCount: 4,
                 isGeneratingMultiDay: false,
                 isAILiveConfigured: false,
                 isNotificationsEnabled: true,
                 onTapWeatherContext: {},
+                onTapPhaseRoadmap: {},
                 onTapNotifications: {},
                 onTapProfile: {},
                 onTapHistory: {},

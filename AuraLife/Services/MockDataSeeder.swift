@@ -21,6 +21,28 @@ enum MockDataSeeder {
             context.insert(profile)
         }
 
+        let phaseDescriptor = FetchDescriptor<RegimenPhase>()
+        var existingPhases = (try? context.fetch(phaseDescriptor)) ?? []
+        let activePhase: RegimenPhase
+        if let found = existingPhases.first(where: { $0.status == .active }) ?? existingPhases.first {
+            activePhase = found
+        } else {
+            let created = RegimenPhase(
+                stageKind: .maintenance,
+                phaseName: "日常顺时固本期",
+                therapeuticPrinciple: "健脾化湿、温阳理气，循序渐进减重",
+                exitCriteria: "排便成形、晨起轻快不困重且饮食作息平稳",
+                nextStageHint: "持续顺时固本，随二十四节气与天气波动微调",
+                startDate: .now,
+                plannedDays: 14,
+                status: .active,
+                triggerSummary: "基于痰湿质78分画像建立初始稳态调理方案"
+            )
+            context.insert(created)
+            existingPhases = [created]
+            activePhase = created
+        }
+
         let snapshotDescriptor = FetchDescriptor<DailyContextSnapshot>()
         let existingSnapshots = (try? context.fetch(snapshotDescriptor)) ?? []
 
@@ -39,7 +61,9 @@ enum MockDataSeeder {
                 healthSleepHours: nil,
                 healthLatestWeightKG: nil,
                 userReportedSymptoms: [],
-                recoveryPhase: "日常稳态调理期"
+                recoveryPhase: activePhase.badgeText(for: .now),
+                therapeuticPrinciple: activePhase.therapeuticPrinciple,
+                regimenPhase: activePhase
             )
             context.insert(snapshot)
 
@@ -90,6 +114,14 @@ enum MockDataSeeder {
                 context.insert(card)
             }
             snapshot.actionCards = cards
+        } else {
+            // 为从 Phase 1-4 升级上来的存量快照补全阶段关联
+            for snap in existingSnapshots where snap.regimenPhase == nil {
+                snap.regimenPhase = activePhase
+                if snap.therapeuticPrinciple.isEmpty {
+                    snap.therapeuticPrinciple = activePhase.therapeuticPrinciple
+                }
+            }
         }
 
         try? context.save()

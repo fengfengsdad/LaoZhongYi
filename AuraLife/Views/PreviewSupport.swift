@@ -6,6 +6,7 @@ enum PreviewSupport {
     static func makeContainer() -> ModelContainer {
         let schema = Schema([
             UserConstitutionProfile.self,
+            RegimenPhase.self,
             DailyContextSnapshot.self,
             ActionCard.self,
             ChatAdjustmentLog.self

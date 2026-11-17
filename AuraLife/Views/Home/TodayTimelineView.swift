@@ -7,6 +7,7 @@ struct TodayTimelineView: View {
     @Environment(\.modelContext) private var modelContext
 
     @Query private var profiles: [UserConstitutionProfile]
+    @Query(sort: \RegimenPhase.startDate, order: .reverse) private var phases: [RegimenPhase]
     @Query(sort: \DailyContextSnapshot.date, order: .forward) private var snapshots: [DailyContextSnapshot]
 
     @State private var selectedDayIndex: Int = 0
@@ -31,11 +32,16 @@ struct TodayTimelineView: View {
     @State private var isShowingAILogs: Bool = false
     @State private var isShowingWeatherContext: Bool = false
     @State private var isShowingNotifications: Bool = false
+    @State private var isShowingPhaseRoadmap: Bool = false
     @State private var errorAlertMessage: String?
     @State private var toastMessage: String?
 
     private var activeProfile: UserConstitutionProfile? {
         profiles.first
+    }
+
+    private var activeRegimenPhase: RegimenPhase? {
+        phases.first(where: { $0.status == .active }) ?? phases.first
     }
 
     private var orderedSnapshots: [DailyContextSnapshot] {
@@ -85,12 +91,14 @@ struct TodayTimelineView: View {
                             snapshot: snapshot,
                             dayTitle: dayHeadline(for: selectedDayIndex),
                             profile: activeProfile,
+                            activePhase: activeRegimenPhase,
                             completedCount: timelineCards.filter(\.isCompleted).count,
                             totalCount: timelineCards.count,
                             isGeneratingMultiDay: isGeneratingMultiDay,
                             isAILiveConfigured: isAILiveConfigured,
                             isNotificationsEnabled: isNotificationsEnabled,
                             onTapWeatherContext: { isShowingWeatherContext = true },
+                            onTapPhaseRoadmap: { isShowingPhaseRoadmap = true },
                             onTapNotifications: { isShowingNotifications = true },
                             onTapProfile: { isShowingProfile = true },
                             onTapHistory: { isShowingHistory = true },
@@ -257,6 +265,12 @@ struct TodayTimelineView: View {
                     isNotificationsEnabled = NotificationPreferences.load().isEnabled
                     return await syncGentleNotifications()
                 }
+            )
+        }
+        .sheet(isPresented: $isShowingPhaseRoadmap) {
+            RegimenPhaseRoadmapSheet(
+                currentPhase: activeSnapshot?.regimenPhase ?? activeRegimenPhase,
+                referenceDate: activeSnapshot?.date ?? .now
             )
         }
         .alert("AI 请求未成功", isPresented: Binding(
@@ -486,6 +500,12 @@ struct TodayTimelineView: View {
             let baseDay = calendar.startOfDay(for: baseSnapshot.date)
 
             withAnimation(.spring(response: 0.36, dampingFraction: 0.85)) {
+                let updatedPhase = upsertActivePhase(
+                    from: result.payload.phaseSpec,
+                    startDate: baseDay,
+                    triggerSummary: "生成未来 \(result.payload.days.count) 日动态规划"
+                )
+
                 for dayPlan in result.payload.days {
                     let targetDate = calendar.date(byAdding: .day, value: dayPlan.dayOffset, to: baseDay) ?? baseDay
                     let targetSnapshot = findOrCreateSnapshot(
@@ -494,7 +514,9 @@ struct TodayTimelineView: View {
                         in: calendar
                     )
 
-                    targetSnapshot.recoveryPhase = dayPlan.recoveryPhase
+                    targetSnapshot.regimenPhase = updatedPhase
+                    targetSnapshot.therapeuticPrinciple = updatedPhase.therapeuticPrinciple
+                    targetSnapshot.recoveryPhase = updatedPhase.badgeText(for: targetDate)
                     if !dayPlan.detectedSymptoms.isEmpty {
                         targetSnapshot.userReportedSymptoms = dayPlan.detectedSymptoms
                     }
@@ -550,7 +572,15 @@ struct TodayTimelineView: View {
         let baseDay = calendar.startOfDay(for: todaySnapshot.date)
 
         withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
-            todaySnapshot.recoveryPhase = proposal.proposedPhase
+            let updatedPhase = upsertActivePhase(
+                from: proposal.phaseSpec,
+                startDate: baseDay,
+                triggerSummary: proposal.userInput
+            )
+
+            todaySnapshot.regimenPhase = updatedPhase
+            todaySnapshot.therapeuticPrinciple = updatedPhase.therapeuticPrinciple
+            todaySnapshot.recoveryPhase = updatedPhase.badgeText(for: todaySnapshot.date)
             todaySnapshot.userReportedSymptoms = proposal.detectedSymptoms
 
             for diff in proposal.diffs {
@@ -566,7 +596,9 @@ struct TodayTimelineView: View {
                     )
                 }
 
-                targetSnapshot.recoveryPhase = proposal.proposedPhase
+                targetSnapshot.regimenPhase = updatedPhase
+                targetSnapshot.therapeuticPrinciple = updatedPhase.therapeuticPrinciple
+                targetSnapshot.recoveryPhase = updatedPhase.badgeText(for: targetDate)
                 targetSnapshot.userReportedSymptoms = proposal.detectedSymptoms
 
                 if let targetID = diff.targetCardID,
@@ -679,7 +711,45 @@ struct TodayTimelineView: View {
             healthSleepHours: template.healthSleepHours,
             healthLatestWeightKG: template.healthLatestWeightKG,
             userReportedSymptoms: template.userReportedSymptoms,
-            recoveryPhase: template.recoveryPhase
+            recoveryPhase: template.recoveryPhase,
+            therapeuticPrinciple: template.therapeuticPrinciple,
+            regimenPhase: template.regimenPhase
+        )
+        modelContext.insert(created)
+        return created
+    }
+
+    private func upsertActivePhase(
+        from spec: AIRegimenPhasePayload,
+        startDate: Date,
+        triggerSummary: String
+    ) -> RegimenPhase {
+        let resolvedStage = spec.resolvedStageKind
+        if let existing = activeRegimenPhase,
+           existing.stageKind == resolvedStage && existing.phaseName == spec.phaseName {
+            existing.therapeuticPrinciple = spec.therapeuticPrinciple
+            existing.exitCriteria = spec.exitCriteria
+            existing.nextStageHint = spec.nextStageHint
+            existing.plannedDays = spec.normalizedPlannedDays
+            existing.updatedAt = .now
+            return existing
+        }
+
+        for item in phases where item.status != .completed {
+            item.status = .completed
+            item.updatedAt = .now
+        }
+
+        let created = RegimenPhase(
+            stageKind: resolvedStage,
+            phaseName: spec.phaseName,
+            therapeuticPrinciple: spec.therapeuticPrinciple,
+            exitCriteria: spec.exitCriteria,
+            nextStageHint: spec.nextStageHint,
+            startDate: startDate,
+            plannedDays: spec.normalizedPlannedDays,
+            status: .active,
+            triggerSummary: triggerSummary
         )
         modelContext.insert(created)
         return created

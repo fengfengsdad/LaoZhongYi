@@ -17,6 +17,8 @@ final class DailyContextSnapshot {
     var healthLatestWeightKG: Double?
     var userReportedSymptoms: [String]
     var recoveryPhase: String
+    var therapeuticPrinciple: String = "健脾化湿、温阳理气，循序渐进减重"
+    var regimenPhase: RegimenPhase?
 
     @Relationship(deleteRule: .cascade, inverse: \ActionCard.snapshot)
     var actionCards: [ActionCard]
@@ -36,6 +38,8 @@ final class DailyContextSnapshot {
         healthLatestWeightKG: Double? = nil,
         userReportedSymptoms: [String] = [],
         recoveryPhase: String = "日常稳态调理期",
+        therapeuticPrinciple: String = "健脾化湿、温阳理气，循序渐进减重",
+        regimenPhase: RegimenPhase? = nil,
         actionCards: [ActionCard] = []
     ) {
         self.id = id
@@ -52,6 +56,8 @@ final class DailyContextSnapshot {
         self.healthLatestWeightKG = healthLatestWeightKG
         self.userReportedSymptoms = userReportedSymptoms
         self.recoveryPhase = recoveryPhase
+        self.therapeuticPrinciple = therapeuticPrinciple
+        self.regimenPhase = regimenPhase
         self.actionCards = actionCards
     }
 
@@ -61,7 +67,10 @@ final class DailyContextSnapshot {
     }
 
     var isAcuteRecovery: Bool {
-        recoveryPhase.contains("恢复期") || !userReportedSymptoms.isEmpty
+        if let regimenPhase {
+            return regimenPhase.stageKind == .acuteRelief || regimenPhase.stageKind == .dampnessClearing
+        }
+        return recoveryPhase.contains("恢复期") || recoveryPhase.contains("治标") || !userReportedSymptoms.isEmpty
     }
 
     var sortedCards: [ActionCard] {

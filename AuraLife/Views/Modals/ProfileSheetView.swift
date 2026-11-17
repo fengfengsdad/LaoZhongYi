@@ -442,24 +442,22 @@ private struct FlowTagsView: View {
     let onRemove: (String) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(tags, id: \.self) { tag in
-                    HStack(spacing: 4) {
-                        Text(tag)
-                            .font(.caption.weight(.medium))
-                        Button {
-                            onRemove(tag)
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 9, weight: .bold))
-                        }
+        FlowLayout(spacing: 8, lineSpacing: 8) {
+            ForEach(tags, id: \.self) { tag in
+                HStack(spacing: 4) {
+                    Text(tag)
+                        .font(.caption.weight(.medium))
+                    Button {
+                        onRemove(tag)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
                     }
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(tint.opacity(0.13), in: Capsule())
                 }
+                .foregroundStyle(tint)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(tint.opacity(0.13), in: Capsule())
             }
         }
     }

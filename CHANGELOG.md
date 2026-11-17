@@ -12,6 +12,7 @@
 - 在 `AIStructuredModels`、`AIStructuredSchemas`、`AIPromptBuilder`、`AIService` 与 `LocalContextPlanner` 中新增「4+2 自适应十问歌追问」（`auralife_onboarding_followup`）及「四诊合参初诊定方」（`auralife_onboarding_assessment`），支持上热下寒、寒湿、湿热等精细辨证与「置信度 + 3 天以方测证试探校准」。
 
 ### Changed (Phase 9 优先级 1)
+- 新增 `FlowLayout` 自动换行流式标签布局，在 `OnboardingFlowView` 与 `ProfileSheetView` 中支持自然换行展示；同时在建档 Step 1 扩充常用饮食/运动预设并支持自由添加自定义忌口、运动限制及特殊说明。
 - 为 `UserConstitutionProfile` 新增 `constitutionConfidencePercent`、`assessmentMethod` 与 `needsCalibrationTrial` 字段；在 `TodayTimelineView` 复诊转段时自动根据反馈校准置信度。
 - 升级 `ContentView` 自动区分新用户建档与存量用户平滑进入；在 `ProfileSheetView` 展示置信度与「重新运行首次四诊合参建档引导」入口。
 - 更新 `.cursor/rules/auralife.mdc`，补充 Phase 9（含优先级 1～3）完整规划。

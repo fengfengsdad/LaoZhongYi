@@ -80,8 +80,14 @@ struct OnboardingFlowView: View {
         )
     ]
 
-    private let dietaryPresets = ["忌生冷冰饮", "忌寒凉海鲜", "少油腻甜食", "少辛辣刺激", "偏爱温热汤羹"]
-    private let fitnessPresets = ["室外游泳40min", "居家轻抗阻", "八段锦导引", "讨厌传统跑步有氧", "餐后散步"]
+    private let dietaryPresets = [
+        "忌生冷冰饮", "忌寒凉海鲜", "少油腻甜食", "少辛辣刺激", "偏爱温热汤羹",
+        "乳糖不耐/忌牛奶", "不吃牛羊肉", "忌香菜/葱蒜", "清淡素食倾向", "控糖低升糖"
+    ]
+    private let fitnessPresets = [
+        "室外游泳40min", "居家轻抗阻", "八段锦导引", "讨厌传统跑步有氧",
+        "餐后散步", "有健身房器械", "羽毛球/球类", "久坐办公护腰", "膝盖不适避跑跳"
+    ]
     private let diningOptions = ["居家做饭", "外卖", "食堂"]
 
     @State private var currentStep: Step = .basics
@@ -93,6 +99,9 @@ struct OnboardingFlowView: View {
     @State private var diningEnvironment: String = "居家做饭"
     @State private var selectedDietPrefs: [String] = ["忌生冷冰饮", "偏爱温热汤羹"]
     @State private var selectedFitnessPrefs: [String] = ["居家轻抗阻", "讨厌传统跑步有氧"]
+    @State private var newDietTag: String = ""
+    @State private var newFitnessTag: String = ""
+    @State private var constraintNote: String = ""
     @State private var isSyncingHealthWeight: Bool = false
     @State private var healthFillMessage: String?
 
@@ -309,7 +318,7 @@ struct OnboardingFlowView: View {
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AuraTheme.hairline, lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("饮食忌口与运动习惯（可多选）")
+                Text("饮食忌口与运动习惯（可多选或自定义）")
                     .font(.headline)
                     .foregroundStyle(AuraTheme.primaryText)
 
@@ -317,15 +326,71 @@ struct OnboardingFlowView: View {
                     .font(.caption)
                     .foregroundStyle(AuraTheme.secondaryText)
 
-                SelectableChipsWrap(options: dietaryPresets, selected: $selectedDietPrefs, tint: AuraTheme.sageGreen)
+                SelectableChipsWrap(
+                    presets: dietaryPresets,
+                    selected: $selectedDietPrefs,
+                    tint: AuraTheme.sageGreen
+                )
+
+                HStack(spacing: 8) {
+                    TextField("自定义忌口或过敏原（如：对花生过敏）", text: $newDietTag)
+                        .font(.subheadline)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(AuraTheme.subtleSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .submitLabel(.done)
+                        .onSubmit { addCustomDietTag() }
+
+                    Button("添加") {
+                        addCustomDietTag()
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(AuraTheme.sageGreen)
+                    .disabled(newDietTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
 
                 Divider()
 
-                Text("运动偏好与禁忌")
+                Text("运动偏好与身体限制")
                     .font(.caption)
                     .foregroundStyle(AuraTheme.secondaryText)
 
-                SelectableChipsWrap(options: fitnessPresets, selected: $selectedFitnessPrefs, tint: AuraTheme.warmGinger)
+                SelectableChipsWrap(
+                    presets: fitnessPresets,
+                    selected: $selectedFitnessPrefs,
+                    tint: AuraTheme.warmGinger
+                )
+
+                HStack(spacing: 8) {
+                    TextField("自定义运动习惯或旧伤（如：腰间盘突出）", text: $newFitnessTag)
+                        .font(.subheadline)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(AuraTheme.subtleSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .submitLabel(.done)
+                        .onSubmit { addCustomFitnessTag() }
+
+                    Button("添加") {
+                        addCustomFitnessTag()
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(AuraTheme.warmGinger)
+                    .disabled(newFitnessTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("补充说明（可选）")
+                        .font(.caption)
+                        .foregroundStyle(AuraTheme.secondaryText)
+                    TextField("例如：家里只有一对 5kg 哑铃，或正在备孕/服药等", text: $constraintNote, axis: .vertical)
+                        .font(.subheadline)
+                        .lineLimit(1...3)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(AuraTheme.subtleSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
             }
             .padding(16)
             .background(AuraTheme.cardSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -980,6 +1045,26 @@ struct OnboardingFlowView: View {
         }
     }
 
+    private func addCustomDietTag() {
+        let trimmed = newDietTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if !selectedDietPrefs.contains(trimmed) {
+            HapticFeedback.impact(.light)
+            selectedDietPrefs.append(trimmed)
+        }
+        newDietTag = ""
+    }
+
+    private func addCustomFitnessTag() {
+        let trimmed = newFitnessTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if !selectedFitnessPrefs.contains(trimmed) {
+            HapticFeedback.impact(.light)
+            selectedFitnessPrefs.append(trimmed)
+        }
+        newFitnessTag = ""
+    }
+
     private func orderedAllAnswers() -> [OnboardingInquiryAnswer] {
         var all = orderedBaseAnswers()
         if let followUpQuestions = followUpResponse?.questions {
@@ -988,6 +1073,10 @@ struct OnboardingFlowView: View {
                     all.append(OnboardingInquiryAnswer(id: q.id, question: q.question, answer: ans))
                 }
             }
+        }
+        let trimmedNote = constraintNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedNote.isEmpty {
+            all.append(OnboardingInquiryAnswer(id: "extra_constraint", question: "个人特殊限制与设备补充", answer: trimmedNote))
         }
         return all
     }
@@ -1038,6 +1127,12 @@ struct OnboardingFlowView: View {
             tongueImage != nil ? "舌象" : nil
         ].compactMap { $0 }
 
+        let trimmedNote = constraintNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        var initialTolerance = [response.baselineToleranceNote]
+        if !trimmedNote.isEmpty && !initialTolerance.contains(trimmedNote) {
+            initialTolerance.append("个人限制：\(trimmedNote)")
+        }
+
         let profile = UserConstitutionProfile(
             heightCM: heightCM,
             weightKG: weightKG,
@@ -1045,7 +1140,7 @@ struct OnboardingFlowView: View {
             constitutionTags: response.allConstitutionTags,
             dietaryPreferences: selectedDietPrefs,
             fitnessPreferences: selectedFitnessPrefs,
-            toleranceNotes: [response.baselineToleranceNote],
+            toleranceNotes: initialTolerance,
             constitutionConfidencePercent: response.clampedConfidence,
             assessmentMethod: methodParts.joined(separator: " + "),
             needsCalibrationTrial: response.needsThreeDayTrial,
@@ -1196,32 +1291,45 @@ struct OnboardingFlowView: View {
 }
 
 private struct SelectableChipsWrap: View {
-    let options: [String]
+    let presets: [String]
     @Binding var selected: [String]
     let tint: Color
 
+    private var allDisplayItems: [String] {
+        var merged = presets
+        for custom in selected where !merged.contains(custom) {
+            merged.append(custom)
+        }
+        return merged
+    }
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(options, id: \.self) { item in
-                    let isSelected = selected.contains(item)
-                    Button {
-                        HapticFeedback.impact(.light)
-                        if isSelected {
-                            selected.removeAll { $0 == item }
-                        } else {
-                            selected.append(item)
-                        }
-                    } label: {
+        FlowLayout(spacing: 8, lineSpacing: 8) {
+            ForEach(allDisplayItems, id: \.self) { item in
+                let isSelected = selected.contains(item)
+                let isCustom = !presets.contains(item)
+                Button {
+                    HapticFeedback.impact(.light)
+                    if isSelected {
+                        selected.removeAll { $0 == item }
+                    } else {
+                        selected.append(item)
+                    }
+                } label: {
+                    HStack(spacing: 4) {
                         Text(item)
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(isSelected ? .white : AuraTheme.primaryText)
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 7)
-                            .background(isSelected ? tint : AuraTheme.subtleSurface, in: Capsule())
+                        if isCustom && isSelected {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .bold))
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .foregroundStyle(isSelected ? .white : AuraTheme.primaryText)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(isSelected ? tint : AuraTheme.subtleSurface, in: Capsule())
                 }
+                .buttonStyle(.plain)
             }
         }
     }

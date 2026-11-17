@@ -182,6 +182,7 @@ enum AIStructuredSchemas {
                 "clinicalAssessment",
                 "summary",
                 "newPhaseSpec",
+                "evolutionSpec",
                 "remainingSymptoms",
                 "cards"
             ],
@@ -200,6 +201,35 @@ enum AIStructuredSchemas {
                     "description": "向用户解释本次转段或巩固的核心变化"
                 ],
                 "newPhaseSpec": phaseSpecSchema,
+                "evolutionSpec": [
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "shouldUpdateProfile",
+                        "updatedConstitutionTags",
+                        "deltaSummary",
+                        "toleranceNote"
+                    ],
+                    "properties": [
+                        "shouldUpdateProfile": [
+                            "type": "boolean",
+                            "description": "若体质偏颇评分或脾胃耐受有明显变化则填 true"
+                        ],
+                        "updatedConstitutionTags": [
+                            "type": "array",
+                            "description": "更新后的体质标签列表（如痰湿质由78分调为75分）",
+                            "items": ["type": "string"]
+                        ],
+                        "deltaSummary": [
+                            "type": "string",
+                            "description": "一句简短体质演进总结，如：寒湿反应平复，痰湿负荷略有回落"
+                        ],
+                        "toleranceNote": [
+                            "type": "string",
+                            "description": "记录本周期耐受/反馈（如：对炒薏米焦米水与八段锦耐受良好）"
+                        ]
+                    ]
+                ],
                 "remainingSymptoms": [
                     "type": "array",
                     "items": ["type": "string"]

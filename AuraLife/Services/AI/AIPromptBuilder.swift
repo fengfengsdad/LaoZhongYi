@@ -8,6 +8,7 @@ struct AIProfileContext: Sendable {
     let constitutionTags: [String]
     let dietaryPreferences: [String]
     let fitnessPreferences: [String]
+    let toleranceNotes: [String]
     let diningEnvironment: String
 
     @MainActor
@@ -19,6 +20,7 @@ struct AIProfileContext: Sendable {
         self.constitutionTags = profile.constitutionTags
         self.dietaryPreferences = profile.dietaryPreferences
         self.fitnessPreferences = profile.fitnessPreferences
+        self.toleranceNotes = profile.toleranceNotes
         self.diningEnvironment = profile.diningEnvironment
     }
 }
@@ -176,6 +178,7 @@ enum AIPromptBuilder {
         let tags = profile.constitutionTags.isEmpty ? "暂无" : profile.constitutionTags.joined(separator: "、")
         let diet = profile.dietaryPreferences.isEmpty ? "暂无" : profile.dietaryPreferences.joined(separator: "、")
         let fitness = profile.fitnessPreferences.isEmpty ? "暂无" : profile.fitnessPreferences.joined(separator: "、")
+        let tolerance = profile.toleranceNotes.isEmpty ? "暂无记录" : profile.toleranceNotes.joined(separator: "；")
 
         return """
         用户长期体质画像：
@@ -183,6 +186,7 @@ enum AIPromptBuilder {
         - 体质标签：\(tags)
         - 饮食偏好与忌口：\(diet)
         - 运动偏好与限制：\(fitness)
+        - 既往调理耐受反馈：\(tolerance)
         - 日常就餐场景：\(profile.diningEnvironment)
         """
     }
@@ -344,9 +348,9 @@ enum AIPromptBuilder {
         - 用户补充说明：\(noteLine)
 
         任务：请严格依据中医「效不更方，变证易法」与转归规律进行复诊判断：
-        1. 若用户明显好转：按 `急症治标期(acuteRelief) -> 祛邪疏通期(dampnessClearing) -> 缓调扶正期(tonifying) -> 顺时固本期(maintenance)` 顺序推进至下一阶段，设置 `transitionDecision = "advanceToNextStage"`，更新 `newPhaseSpec`，清空已缓解症状，并生成紧扣新治则的今日 4 张卡片。
+        1. 若用户明显好转：按 `急症治标期(acuteRelief) -> 祛邪疏通期(dampnessClearing) -> 缓调扶正期(tonifying) -> 顺时固本期(maintenance)` 顺序推进至下一阶段，设置 `transitionDecision = "advanceToNextStage"`，更新 `newPhaseSpec`，清空已缓解症状，并生成紧扣新治则的今日 4 张卡片；同时在 `evolutionSpec` 中给出合理的体质演化评估（如偏颇分数微降 2～3 分或记录食材耐受良好）。
         2. 若用户略有改善仍需巩固：设置 `transitionDecision = "extendCurrentStage"`，沿用当前阶段并微调更稳妥的过渡饮食与运动。
-        3. 若仍有不适或出现新变化：设置 `transitionDecision = "adjustPlan"`，结合补充说明重新立法与重排今日 4 张卡片。
+        3. 若仍有不适或出现新变化：设置 `transitionDecision = "adjustPlan"`，结合补充说明重新立法与重排今日 4 张卡片，并在 `evolutionSpec.toleranceNote` 中记录诱因或不适反馈。
         """
     }
 }

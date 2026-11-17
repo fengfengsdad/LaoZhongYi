@@ -115,11 +115,19 @@ struct AICardSwapResponse: Codable, Sendable {
     }
 }
 
+struct AIConstitutionEvolutionPayload: Codable, Sendable {
+    let shouldUpdateProfile: Bool
+    let updatedConstitutionTags: [String]
+    let deltaSummary: String
+    let toleranceNote: String
+}
+
 struct AIPhaseTransitionResponse: Codable, Sendable {
     let transitionDecision: String
     let clinicalAssessment: String
     let summary: String
     let newPhaseSpec: AIRegimenPhasePayload
+    let evolutionSpec: AIConstitutionEvolutionPayload
     let remainingSymptoms: [String]
     let cards: [AIPlannedCardPayload]
 

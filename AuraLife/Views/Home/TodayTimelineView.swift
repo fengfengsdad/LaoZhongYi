@@ -936,6 +936,39 @@ struct TodayTimelineView: View {
                 wasApplied: true
             )
             modelContext.insert(log)
+
+            let evolution = response.evolutionSpec
+            if let profile = activeProfile {
+                if evolution.shouldUpdateProfile && !evolution.updatedConstitutionTags.isEmpty {
+                    profile.constitutionTags = evolution.updatedConstitutionTags
+                }
+                let trimmedTolerance = evolution.toleranceNote.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedTolerance.isEmpty && !profile.toleranceNotes.contains(trimmedTolerance) {
+                    profile.toleranceNotes.append(trimmedTolerance)
+                    if profile.toleranceNotes.count > 6 {
+                        profile.toleranceNotes.removeFirst(profile.toleranceNotes.count - 6)
+                    }
+                }
+                profile.updatedAt = .now
+            }
+
+            let snapshotTags = evolution.updatedConstitutionTags.isEmpty
+                ? (activeProfile?.constitutionTags ?? [])
+                : evolution.updatedConstitutionTags
+
+            let record = ConstitutionEvolutionRecord(
+                date: .now,
+                phaseName: targetPhase.phaseName,
+                stageKind: targetPhase.stageKind,
+                therapeuticPrinciple: targetPhase.therapeuticPrinciple,
+                outcomeTitle: outcome.title,
+                clinicalNote: response.clinicalAssessment,
+                constitutionSnapshotTags: snapshotTags,
+                deltaSummary: evolution.deltaSummary,
+                toleranceNote: evolution.toleranceNote
+            )
+            modelContext.insert(record)
+
             try? modelContext.save()
         }
 

@@ -6,6 +6,15 @@
 
 ## [Unreleased] - develop
 
+### Added (Phase 8：体质画像动态演化与个人医案档案)
+- 新增 `ConstitutionEvolutionRecord` SwiftData 模型，按周期沉淀证型评估、治法总则、主体质分值趋势、演化总结与耐受反馈；在 `UserConstitutionProfile` 中新增 `toleranceNotes` 持久化字段并在 `MockDataSeeder` 注入初始建档基线。
+- 在 `AIStructuredModels`、`AIStructuredSchemas` 与 `LocalContextPlanner` 中为复诊转段新增 `evolutionSpec`（`AIConstitutionEvolutionPayload`），支持好转转段时自动温和更新体质标签与评分。
+
+### Changed (Phase 8)
+- 升级 `AIPromptBuilder` 将 `toleranceNotes`（既往食材/运动耐受反馈）纳入长期体质画像 Prompt，使后续规划越用越贴合个体反应。
+- 升级 `PhaseFollowUpSheet` 展示体质演化与耐受沉淀预览；在 `TodayTimelineView` 确认转段时自动写回 `UserConstitutionProfile` 并创建 `ConstitutionEvolutionRecord`。
+- 升级 `ProfileSheetView` 新增「体质演化轨迹 & 耐受记忆」柱状趋势与反馈标签；将 `AdjustmentHistorySheet` 升级为「调理医案档案」（支持「调理医案」与「微调流水」双标签切换）。
+
 ### Added (Phase 7：周期复诊转段闭环)
 - 新增 `FollowUpOutcome`（明显好转 / 略有改善需巩固 / 仍有不适或新变化）与 `RegimenPhase.shouldSuggestFollowUp` 复诊节点判定逻辑。
 - 新增 `PhaseFollowUpBannerCard`（今日时间轴复诊提示卡）与 `PhaseFollowUpSheet`（复诊评估与转段预览弹窗，支持 `#Preview`）。
@@ -33,9 +42,6 @@
 - 升级 `AIStructuredModels` 与 `AIStructuredSchemas`，在多日规划（`AIMultiDayPlanResponse`）与动态微调（`AIAdjustmentResponse`）中强制输出 `phaseSpec`（分期、治法总则、预计天数、转段标准）。
 - 升级 `AIPromptBuilder`、`AIService` 与 `LocalContextPlanner`，将当前中医分期与治法总则注入全部 LLM Prompt 与离线演示引擎。
 - 升级首页 `RecoveryBannerView` 与 `AdjustmentDiffSheet`，展示当前分期进度（如 `第 1/3 天`）及「治则」横条，应用微调时自动归档旧阶段并切换至新阶段。
-
-### Planned
-- **Phase 8**：体质画像动态演化与个人医案（Constitution Evolution）
 
 ---
 

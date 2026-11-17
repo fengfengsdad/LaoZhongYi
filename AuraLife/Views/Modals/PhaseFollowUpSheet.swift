@@ -262,6 +262,24 @@ struct PhaseFollowUpSheet: View {
                 Text(response.summary)
                     .font(.caption)
                     .foregroundStyle(AuraTheme.secondaryText)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.caption2)
+                            .foregroundStyle(AuraTheme.sageGreen)
+                        Text("体质演化：\(response.evolutionSpec.deltaSummary)")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(AuraTheme.primaryText)
+                    }
+
+                    Text("耐受沉淀：\(response.evolutionSpec.toleranceNote)")
+                        .font(.caption2)
+                        .foregroundStyle(AuraTheme.secondaryText)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AuraTheme.subtleSurface.opacity(0.8), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .padding(14)
             .background(AuraTheme.cardSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

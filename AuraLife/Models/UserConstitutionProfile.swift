@@ -10,6 +10,7 @@ final class UserConstitutionProfile {
     var constitutionTags: [String]
     var dietaryPreferences: [String]
     var fitnessPreferences: [String]
+    var toleranceNotes: [String] = []
     var diningEnvironment: String
     var rawReportSummary: String
     var updatedAt: Date
@@ -22,6 +23,7 @@ final class UserConstitutionProfile {
         constitutionTags: [String] = ["痰湿质78分", "轻微气虚", "肠胃敏感"],
         dietaryPreferences: [String] = ["忌生冷冰饮", "少油腻甜食", "偏爱温热汤羹"],
         fitnessPreferences: [String] = ["室外游泳40min", "讨厌传统跑步有氧", "居家轻抗阻"],
+        toleranceNotes: [String] = [],
         diningEnvironment: String = "居家做饭",
         rawReportSummary: String = "",
         updatedAt: Date = .now
@@ -33,6 +35,7 @@ final class UserConstitutionProfile {
         self.constitutionTags = constitutionTags
         self.dietaryPreferences = dietaryPreferences
         self.fitnessPreferences = fitnessPreferences
+        self.toleranceNotes = toleranceNotes
         self.diningEnvironment = diningEnvironment
         self.rawReportSummary = rawReportSummary
         self.updatedAt = updatedAt

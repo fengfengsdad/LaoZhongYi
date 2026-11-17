@@ -6,6 +6,7 @@ struct AuraLifeApp: App {
     private let sharedModelContainer: ModelContainer = {
         let schema = Schema([
             UserConstitutionProfile.self,
+            ConstitutionEvolutionRecord.self,
             RegimenPhase.self,
             DailyContextSnapshot.self,
             ActionCard.self,

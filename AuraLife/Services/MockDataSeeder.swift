@@ -43,6 +43,24 @@ enum MockDataSeeder {
             activePhase = created
         }
 
+        let evolutionDescriptor = FetchDescriptor<ConstitutionEvolutionRecord>()
+        let existingEvolutions = (try? context.fetch(evolutionDescriptor)) ?? []
+        if existingEvolutions.isEmpty {
+            let currentTags = (try? context.fetch(profileDescriptor))?.first?.constitutionTags ?? ["痰湿质78分", "轻微气虚", "肠胃敏感"]
+            let baselineRecord = ConstitutionEvolutionRecord(
+                date: .now,
+                phaseName: activePhase.phaseName,
+                stageKind: activePhase.stageKind,
+                therapeuticPrinciple: activePhase.therapeuticPrinciple,
+                outcomeTitle: "初始建档",
+                clinicalNote: "依据体质辨识报告建立日常顺时调理基线。",
+                constitutionSnapshotTags: currentTags,
+                deltaSummary: "建立痰湿质顺时调理基线",
+                toleranceNote: "偏爱温热汤羹、室外游泳，忌生冷冰饮"
+            )
+            context.insert(baselineRecord)
+        }
+
         let snapshotDescriptor = FetchDescriptor<DailyContextSnapshot>()
         let existingSnapshots = (try? context.fetch(snapshotDescriptor)) ?? []
 

@@ -6,6 +6,7 @@ import UIKit
 struct ProfileSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var profile: UserConstitutionProfile
+    @Query(sort: \ConstitutionEvolutionRecord.date, order: .forward) private var evolutionRecords: [ConstitutionEvolutionRecord]
 
     @State private var reportText: String = ""
     @State private var selectedReportImage: PhotosPickerItem?
@@ -23,6 +24,7 @@ struct ProfileSheetView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     bodyMetricsSection
                     constitutionTagsSection
+                    evolutionTrendSection
                     preferencesSection
                     reportImportSection
                 }
@@ -113,6 +115,81 @@ struct ProfileSheetView: View {
 
             FlowTagsView(tags: profile.constitutionTags, tint: AuraTheme.warmGinger) { tag in
                 profile.constitutionTags.removeAll { $0 == tag }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AuraTheme.cardSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AuraTheme.hairline, lineWidth: 1))
+    }
+
+    private var evolutionTrendSection: some View {
+        let scoredRecords = evolutionRecords.filter { $0.primaryConstitutionScore != nil }
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("体质演化轨迹 & 耐受记忆", systemImage: "chart.line.uptrend.xyaxis")
+                    .font(.headline)
+                    .foregroundStyle(AuraTheme.primaryText)
+                Spacer()
+                Text("共 \(evolutionRecords.count) 次节点")
+                    .font(.caption2)
+                    .foregroundStyle(AuraTheme.secondaryText)
+            }
+
+            if !scoredRecords.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("主体质偏颇分值走势（越低越趋于平和）")
+                        .font(.caption2)
+                        .foregroundStyle(AuraTheme.secondaryText)
+
+                    HStack(alignment: .bottom, spacing: 10) {
+                        ForEach(Array(scoredRecords.suffix(6).enumerated()), id: \.element.id) { _, item in
+                            let score = item.primaryConstitutionScore ?? 75
+                            let normalizedHeight = max(20.0, min(68.0, Double(score) * 0.78))
+
+                            VStack(spacing: 4) {
+                                Text("\(score)")
+                                    .font(.caption2.monospacedDigit().weight(.semibold))
+                                    .foregroundStyle(AuraTheme.sageGreen)
+
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(AuraTheme.sageGreen.opacity(0.75))
+                                    .frame(width: 24, height: normalizedHeight)
+
+                                Text(item.date.formatted(.dateTime.month().day()))
+                                    .font(.caption2)
+                                    .foregroundStyle(AuraTheme.secondaryText)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+                .padding(10)
+                .background(AuraTheme.subtleSurface.opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+
+            if let latest = evolutionRecords.last {
+                Text("最近演化：\(latest.deltaSummary)")
+                    .font(.caption)
+                    .foregroundStyle(AuraTheme.primaryText)
+            }
+
+            if !profile.toleranceNotes.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("个人食养与导引耐受反馈（自动注入 AI 规划）")
+                        .font(.caption2)
+                        .foregroundStyle(AuraTheme.secondaryText)
+
+                    FlowTagsView(tags: profile.toleranceNotes, tint: AuraTheme.sageGreen) { note in
+                        profile.toleranceNotes.removeAll { $0 == note }
+                    }
+                }
+            } else {
+                Text("每次完成阶段复诊转段后，系统会自动沉淀你的体质变化与食材/运动耐受反馈。")
+                    .font(.caption)
+                    .foregroundStyle(AuraTheme.secondaryText)
             }
         }
         .padding(16)
@@ -347,4 +424,5 @@ private struct FlowTagsView: View {
     let container = PreviewSupport.makeContainer()
     let profiles = (try? container.mainContext.fetch(FetchDescriptor<UserConstitutionProfile>())) ?? []
     return ProfileSheetView(profile: profiles.first!)
+        .modelContainer(container)
 }

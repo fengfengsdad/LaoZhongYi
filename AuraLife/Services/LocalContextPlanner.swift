@@ -828,10 +828,12 @@ enum LocalContextPlanner {
             windSpeedKmh: snapshot.weatherWindSpeedKmh,
             isAcuteRecovery: false
         )
+        let currentTags = profile?.constitutionTags ?? ["痰湿质78分", "轻微气虚", "肠胃敏感"]
 
         switch outcome {
         case .improved:
             let nextStage = currentStage.nextTypicalStage
+            let evolved = evolvedConstitutionTags(from: currentTags, scoreDelta: -3)
             switch nextStage {
             case .dampnessClearing:
                 let spec = AIRegimenPhasePayload(
@@ -847,6 +849,12 @@ enum LocalContextPlanner {
                     clinicalAssessment: "急性胃肠反应已平复，现转入「祛邪疏通期」巩固化湿。",
                     summary: "已从急症护胃过渡到健脾祛湿，饮食渐增清蒸优质蛋白并重启室内微抗阻。",
                     newPhaseSpec: spec,
+                    evolutionSpec: AIConstitutionEvolutionPayload(
+                        shouldUpdateProfile: true,
+                        updatedConstitutionTags: evolved.tags,
+                        deltaSummary: evolved.deltaSummary,
+                        toleranceNote: "对温胃茶饮与八段锦导引耐受良好"
+                    ),
                     remainingSymptoms: [],
                     cards: [
                         AIPlannedCardPayload(
@@ -894,6 +902,12 @@ enum LocalContextPlanner {
                     clinicalAssessment: "湿浊大退、脾运恢复，进入「缓调扶正期」治本固脾。",
                     summary: "全面恢复蛋白与常规运动节奏，重点培补脾气以防痰湿再生。",
                     newPhaseSpec: spec,
+                    evolutionSpec: AIConstitutionEvolutionPayload(
+                        shouldUpdateProfile: true,
+                        updatedConstitutionTags: evolved.tags,
+                        deltaSummary: evolved.deltaSummary,
+                        toleranceNote: "清蒸蛋白与室内微抗阻适应良好"
+                    ),
                     remainingSymptoms: [],
                     cards: [
                         AIPlannedCardPayload(
@@ -945,6 +959,12 @@ enum LocalContextPlanner {
                     clinicalAssessment: "本周期调理圆满达标，顺利回归「日常顺时固本期」。",
                     summary: "已解除阶段限制，恢复贴合\(snapshot.city)实时天气与减重目标的日常顺时计划。",
                     newPhaseSpec: spec,
+                    evolutionSpec: AIConstitutionEvolutionPayload(
+                        shouldUpdateProfile: true,
+                        updatedConstitutionTags: evolved.tags,
+                        deltaSummary: evolved.deltaSummary,
+                        toleranceNote: "完成整周期调理，脾胃耐受力较前提升"
+                    ),
                     remainingSymptoms: [],
                     cards: [
                         AIPlannedCardPayload(
@@ -997,6 +1017,12 @@ enum LocalContextPlanner {
                 clinicalAssessment: "「效不更方」：当前方向有效但尚需 2 天巩固，暂不急于增量加压。",
                 summary: "为你顺延当前阶段 2 天，保持温和食养与低负荷导引。",
                 newPhaseSpec: spec,
+                evolutionSpec: AIConstitutionEvolutionPayload(
+                    shouldUpdateProfile: false,
+                    updatedConstitutionTags: currentTags,
+                    deltaSummary: "症状改善中，维持当前体质基线并继续观察",
+                    toleranceNote: "对温和食养方案有正向改善"
+                ),
                 remainingSymptoms: snapshot.userReportedSymptoms,
                 cards: [
                     AIPlannedCardPayload(
@@ -1052,6 +1078,12 @@ enum LocalContextPlanner {
                 clinicalAssessment: "症状未达预期或有新变化，已切换为更清简的护胃重整方案（如伴高热剧痛请及时就医）。",
                 summary: "进一步简化今日饮食与活动负荷，以流质温粥和静养观察为主。",
                 newPhaseSpec: spec,
+                evolutionSpec: AIConstitutionEvolutionPayload(
+                    shouldUpdateProfile: false,
+                    updatedConstitutionTags: currentTags,
+                    deltaSummary: "脾胃尚处于敏感波动期，需降负荷护胃",
+                    toleranceNote: noteSnippet.isEmpty ? "当前阶段对肉类或负重较敏感，已简化食谱" : "反馈重点：\(String(noteSnippet.prefix(16)))"
+                ),
                 remainingSymptoms: updatedSymptoms,
                 cards: [
                     AIPlannedCardPayload(
@@ -1085,5 +1117,27 @@ enum LocalContextPlanner {
                 ]
             )
         }
+    }
+
+    private static func evolvedConstitutionTags(
+        from tags: [String],
+        scoreDelta: Int
+    ) -> (tags: [String], deltaSummary: String) {
+        var updated = tags
+        var summary = "脾胃运化改善，整体体质向稳态推进"
+
+        if let first = updated.first,
+           let currentScore = ConstitutionEvolutionRecord.extractScore(from: [first]) {
+            let newScore = max(45, currentScore + scoreDelta)
+            let updatedFirst = first.replacingOccurrences(of: "\(currentScore)分", with: "\(newScore)分")
+            updated[0] = updatedFirst
+            summary = "偏颇指数温和改善（\(currentScore)分 → \(newScore)分）"
+        }
+
+        if let sensitiveIndex = updated.firstIndex(of: "肠胃敏感") {
+            updated[sensitiveIndex] = "脾胃渐稳"
+        }
+
+        return (updated, summary)
     }
 }

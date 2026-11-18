@@ -6,6 +6,15 @@
 
 ## [Unreleased] - develop
 
+### Added (Phase 9 优先级 3 + 望面色：语音闻诊与自然光面色采集)
+- 新增 `SpeechDiagnosisService`（基于 Apple `Speech` + `AVAudioEngine`），支持中文实时流式语音转写、音量波形强度监测及轻量级声息停顿辅助提示，并在 `project.pbxproj` 补充 `NSMicrophoneUsageDescription` 与 `NSSpeechRecognitionUsageDescription` 权限说明。
+- 升级 `TongueCaptureSheet` 支持 `DiagnosticCaptureMode`（`.tongue` 舌象 / `.face` 素颜自然光面色），为建档与日常自检提供素颜面色光泽、浮肿与潮红辅助拍摄与照度质检。
+
+### Changed (Phase 9 优先级 3 + 望面色)
+- 升级 `OnboardingFlowView` Step 2，新增可选「闻诊语音口述近况（+6% 置信度）」与「自然光素颜面色（+8% 置信度）」模块。
+- 升级 `AIService` 支持多张多模态图片同时传入（舌象 + 面色），同步更新 `AIPromptBuilder` 与 `LocalContextPlanner` 将语音口述文本、声息提示及面色纳入追问与初诊辨证。
+- 升级首页 `QuickCheckInBar` 接入实时麦克风语音口述打卡（带动态音量条与时长显示），并在 `ProfileAndSettingsView` 新增「自然光素颜面色自检」入口。
+
 ### Added (三栏架构与防焦虑体验重构)
 - 新增 `MainTabView` 原生三栏主框架（`今日` / `调养` / `我的`），将今日执行与整体调养进度解耦；更新 `ContentView` 在完成建档后进入 `MainTabView`。
 - 新增 `RegimenProgressView`（「调养」Tab 主视图）：集中展示当前分期进度条、治法总则、转段标准与复诊入口、本阶段饮食红绿灯清单、临床四阶段路线图、体质偏颇分值走势及「调理医案 / 微调流水」档案。
@@ -40,7 +49,6 @@
 
 ### Planned (Phase 9 后续优先级)
 - **Phase 9 优先级 2**：扩展 `HealthKitSyncService` 读取近 14 天静息心率、HRV、睡眠规律与经期趋势，交叉验证寒热虚实。
-- **Phase 9 优先级 3**：接入 Apple `Speech` 框架实现语音口述问诊与状态打卡。
 
 ### Added (Phase 8：体质画像动态演化与个人医案档案)
 - 新增 `ConstitutionEvolutionRecord` SwiftData 模型，按周期沉淀证型评估、治法总则、主体质分值趋势、演化总结与耐受反馈；在 `UserConstitutionProfile` 中新增 `toleranceNotes` 持久化字段并在 `MockDataSeeder` 注入初始建档基线。

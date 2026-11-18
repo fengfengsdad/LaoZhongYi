@@ -371,20 +371,28 @@ enum AIPromptBuilder {
         weightKG: Double,
         targetWeightKG: Double,
         baseAnswers: [OnboardingInquiryAnswer],
+        voiceTranscript: String = "",
+        acousticSummary: String? = nil,
         reportText: String,
         hasTongueImage: Bool,
+        hasFaceImage: Bool = false,
         city: String,
         weatherTempC: Double,
         weatherCondition: String
     ) -> String {
         let answersText = baseAnswers.map { "  - \($0.question) → \($0.answer)" }.joined(separator: "\n")
         let trimmedReport = reportText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedVoice = voiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let voiceSection = trimmedVoice.isEmpty
+            ? "无"
+            : "「\(trimmedVoice)」" + (acousticSummary.map { "（\($0)）" } ?? "")
 
         return """
         首次建档自适应十问歌排查：
         - 基础体征：身高 \(String(format: "%.1f", heightCM))cm，体重 \(String(format: "%.1f", weightKG))kg，目标 \(String(format: "%.1f", targetWeightKG))kg
         - 所在环境：\(city) \(Int(weatherTempC.rounded()))°C \(weatherCondition)
-        - 是否附带自然光舌象照片：\(hasTongueImage ? "是" : "否")
+        - 望诊照片：舌象=\(hasTongueImage ? "已采集" : "未采集")，自然光素颜面色=\(hasFaceImage ? "已采集" : "未采集")
+        - 闻诊语音口述：\(voiceSection)
         - 第三方报告文本：\(trimmedReport.isEmpty ? "无" : trimmedReport)
         - 第一层基础四诊回答：
         \(answersText.isEmpty ? "  （未作答）" : answersText)
@@ -403,8 +411,11 @@ enum AIPromptBuilder {
         dietaryPreferences: [String],
         fitnessPreferences: [String],
         allAnswers: [OnboardingInquiryAnswer],
+        voiceTranscript: String = "",
+        acousticSummary: String? = nil,
         reportText: String,
         hasTongueImage: Bool,
+        hasFaceImage: Bool = false,
         city: String,
         weatherTempC: Double,
         weatherCondition: String,
@@ -412,7 +423,20 @@ enum AIPromptBuilder {
     ) -> String {
         let answersText = allAnswers.map { "  - \($0.question) → \($0.answer)" }.joined(separator: "\n")
         let trimmedReport = reportText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let solar = SolarTermCalculator.term(for: .now)
+        let trimmedVoice = voiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let solar = SolarTermCalculator.climateCalibratedGuidance(for: .now, tempC: weatherTempC, humidity: weatherHumidity)
+
+        var visualNotes: [String] = []
+        if hasTongueImage {
+            visualNotes.append("已附自然光舌象照片（请观察舌质色、舌形齿痕与舌苔厚薄润燥）")
+        }
+        if hasFaceImage {
+            visualNotes.append("已附自然光素颜面色照片（请结合面色荣润/萎黄/晦暗/浮肿/两颧潮红作为佐证）")
+        }
+        let visualLine = visualNotes.isEmpty ? "未上传舌象/面色照片" : visualNotes.joined(separator: "；")
+        let voiceLine = trimmedVoice.isEmpty
+            ? "未提供语音口述"
+            : "「\(trimmedVoice)」" + (acousticSummary.map { "（\($0)）" } ?? "")
 
         return """
         首次建档 · 四诊合参综合辨证与第 1 份顺时方案生成：
@@ -422,12 +446,13 @@ enum AIPromptBuilder {
         - 运动偏好/限制：\(fitnessPreferences.isEmpty ? "无特殊" : fitnessPreferences.joined(separator: "、"))
         - 实时环境与节气：\(city) \(Int(weatherTempC.rounded()))°C \(weatherCondition) 湿度\(Int(weatherHumidity.rounded()))% · 节气 \(solar.name)（\(solar.guidance)）
         - 第三方报告文本：\(trimmedReport.isEmpty ? "无" : trimmedReport)
-        - 多模态舌象照片：\(hasTongueImage ? "已附舌象照片，请仔细辨识舌质颜色、舌形齿痕与舌苔厚薄润燥，并将其作为核心依据之一。" : "未上传舌象照片")
+        - 望诊多模态输入：\(visualLine)
+        - 闻诊语音口述：\(voiceLine)
         - 自适应问诊问答：
         \(answersText.isEmpty ? "  （未作答）" : answersText)
 
         任务：
-        1. 综合望诊（舌象）+ 问诊 + 地域气候给出 `primaryConstitution`（如“痰湿质74分”）与 `secondaryTags`，并诚实评估 `confidencePercent`（无报告无舌象一般在 65~75；有舌象或报告可达 80~90）。
+        1. 综合望诊（舌象/面色）+ 闻诊（口述主诉与声息参考）+ 问诊 + 地域气候给出 `primaryConstitution`（如“痰湿质74分”）与 `secondaryTags`，并诚实评估 `confidencePercent`（无报告无照片一般在 65~75；加上舌象/面色/语音/报告可达 80~92）。
         2. 像老中医面对面交代一样，用大白话填好 `plainDiagnosis`（当前主要卡在什么问题）、`strategyOverview`（接下来分哪几步怎么调）、`expectedTimeline`（大概需要多久、第几天看什么变化来判断有效）以及 `suggestedPhaseSpec`（含 `dietaryBoundary` 饮食红绿灯边界）。
         3. 若置信度 < 80 或有兼夹待确认项，设 `needsThreeDayTrial = true`，在 `suggestedPhaseSpec` 中制定 3 天「初筛试探校准期」（以温和中庸的方案以方测证，观察 2～3 天后复诊提准）。
         4. 生成第 1 日的 5 张 `initialDayCards`（早间温热早餐+顺时饮、午间正餐、下午导引/运动、傍晚轻食晚餐、睡前起居），严禁触犯用户忌口与运动黑名单，外卖/食堂场景严禁出现需现炖药膳汤，每张需含 `corePrinciple`、`flexibleSwapHint` 与不超过 30 字的 `reasoning`。

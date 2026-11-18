@@ -4,6 +4,69 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
+enum DiagnosticCaptureMode: String, Sendable {
+    case tongue
+    case face
+
+    var navigationTitle: String {
+        switch self {
+        case .tongue: return "标准化舌象采集"
+        case .face: return "自然光素颜面色采集"
+        }
+    }
+
+    var guidanceTitle: String {
+        switch self {
+        case .tongue: return "减少舌苔色偏的三条拍照原则"
+        case .face: return "还原真实面色的三条拍照原则"
+        }
+    }
+
+    var guidanceSteps: String {
+        switch self {
+        case .tongue:
+            return "1. 请面向窗户等自然白光，避开暖黄台灯或强背光。\n2. 勿使用美颜、滤镜，以免抹掉舌苔厚腻感与齿痕。\n3. 自然伸舌 2 秒，对准框内即可拍摄。"
+        case .face:
+            return "1. 素颜面向自然白光，避开有色灯光与美颜滤镜。\n2. 摘掉反光眼镜，面部放松平视镜头（看面色光泽、浮肿或潮红）。\n3. 若当前已带妆或不便拍照，可直接关闭跳过。"
+        }
+    }
+
+    var overlayPrompt: String {
+        switch self {
+        case .tongue: return "请将舌面置于虚线框内"
+        case .face: return "请将面部置于虚线框内"
+        }
+    }
+
+    var overlaySize: CGSize {
+        switch self {
+        case .tongue: return CGSize(width: 150, height: 195)
+        case .face: return CGSize(width: 205, height: 255)
+        }
+    }
+
+    var captureButtonTitle: String {
+        switch self {
+        case .tongue: return "拍摄舌象"
+        case .face: return "拍摄面色"
+        }
+    }
+
+    var pickerButtonTitle: String {
+        switch self {
+        case .tongue: return "从相册选择舌象照片"
+        case .face: return "从相册选择素颜面色照"
+        }
+    }
+
+    var confirmButtonTitle: String {
+        switch self {
+        case .tongue: return "使用这张舌象"
+        case .face: return "使用这张面色照"
+        }
+    }
+}
+
 enum TonguePhotoQuality: Sendable {
     case good(brightness: Double)
     case tooDark(brightness: Double)
@@ -215,7 +278,16 @@ private struct CameraPreviewView: UIViewRepresentable {
 struct TongueCaptureSheet: View {
     @Environment(\.dismiss) private var dismiss
 
+    let mode: DiagnosticCaptureMode
     let onConfirmImage: (UIImage, TonguePhotoQuality) -> Void
+
+    init(
+        mode: DiagnosticCaptureMode = .tongue,
+        onConfirmImage: @escaping (UIImage, TonguePhotoQuality) -> Void
+    ) {
+        self.mode = mode
+        self.onConfirmImage = onConfirmImage
+    }
 
     @State private var camera = TongueCameraController()
     @State private var capturedImage: UIImage?
@@ -238,7 +310,7 @@ struct TongueCaptureSheet: View {
                 .padding(16)
             }
             .background(AuraTheme.canvasBackground.ignoresSafeArea())
-            .navigationTitle("标准化舌象采集")
+            .navigationTitle(mode.navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -270,11 +342,11 @@ struct TongueCaptureSheet: View {
 
     private var guidanceBanner: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("减少色偏的三条拍照原则", systemImage: "sun.max.fill")
+            Label(mode.guidanceTitle, systemImage: "sun.max.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AuraTheme.primaryText)
 
-            Text("1. 请面向窗户等自然白光，避开暖黄台灯或强背光。\n2. 勿使用美颜、滤镜，以免抹掉舌苔厚腻感与齿痕。\n3. 自然伸舌 2 秒，对准框内即可拍摄。")
+            Text(mode.guidanceSteps)
                 .font(.caption)
                 .foregroundStyle(AuraTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -297,11 +369,11 @@ struct TongueCaptureSheet: View {
                     RoundedRectangle(cornerRadius: 80, style: .continuous)
                         .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
                         .foregroundStyle(Color.white.opacity(0.85))
-                        .frame(width: 150, height: 195)
+                        .frame(width: mode.overlaySize.width, height: mode.overlaySize.height)
 
                     VStack {
                         Spacer()
-                        Text("请将舌面置于虚线框内")
+                        Text(mode.overlayPrompt)
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)
@@ -334,7 +406,7 @@ struct TongueCaptureSheet: View {
                             }
                         }
                     } label: {
-                        Label(isCapturing ? "采集中…" : "拍摄舌象", systemImage: "camera.circle.fill")
+                        Label(isCapturing ? "采集中…" : mode.captureButtonTitle, systemImage: "camera.circle.fill")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
@@ -363,13 +435,13 @@ struct TongueCaptureSheet: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AuraTheme.primaryText)
 
-                Text("你可以直接从相册选择自然光下拍摄的舌象照片，系统会自动校验画面照度。")
+                Text("你可以直接从相册选择自然光下拍摄的\(mode == .tongue ? "舌象" : "素颜面色")照片，系统会自动校验画面照度。")
                     .font(.caption)
                     .foregroundStyle(AuraTheme.secondaryText)
                     .multilineTextAlignment(.center)
 
                 PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                    Label("从相册选择舌象照片", systemImage: "photo.on.rectangle")
+                    Label(mode.pickerButtonTitle, systemImage: "photo.on.rectangle")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -432,7 +504,7 @@ struct TongueCaptureSheet: View {
                     camera.stop()
                     dismiss()
                 } label: {
-                    Text("使用这张舌象")
+                    Text(mode.confirmButtonTitle)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)

@@ -84,7 +84,7 @@ actor AIService {
             config: testConfig,
             systemPrompt: "你是连通性测试助手。",
             userPrompt: "请输出：{\"title\":\"连通正常\",\"actionDetail\":\"测试通过\",\"reasoning\":\"接口连通性验证成功\"}",
-            imageBase64: nil,
+            encodedImages: [],
             schemaName: AIStructuredSchemas.cardSwapSchemaName,
             schema: AIStructuredSchemas.cardSwapSchema
         )
@@ -136,7 +136,7 @@ actor AIService {
             config: config,
             systemPrompt: AIPromptBuilder.systemPrompt,
             userPrompt: prompt,
-            image: nil,
+            images: [],
             schemaName: AIStructuredSchemas.multiDayPlanSchemaName,
             schema: AIStructuredSchemas.multiDayPlanSchema,
             onStreamProgress: onStreamProgress
@@ -202,7 +202,7 @@ actor AIService {
             config: config,
             systemPrompt: AIPromptBuilder.systemPrompt,
             userPrompt: prompt,
-            image: attachedImage,
+            images: attachedImage.map { [$0] } ?? [],
             schemaName: AIStructuredSchemas.adjustmentSchemaName,
             schema: AIStructuredSchemas.adjustmentSchema,
             onStreamProgress: onStreamProgress
@@ -257,7 +257,7 @@ actor AIService {
             config: config,
             systemPrompt: AIPromptBuilder.systemPrompt,
             userPrompt: prompt,
-            image: nil,
+            images: [],
             schemaName: AIStructuredSchemas.cardSwapSchemaName,
             schema: AIStructuredSchemas.cardSwapSchema,
             onStreamProgress: onStreamProgress
@@ -305,7 +305,7 @@ actor AIService {
             config: config,
             systemPrompt: AIPromptBuilder.systemPrompt,
             userPrompt: prompt,
-            image: nil,
+            images: [],
             schemaName: AIStructuredSchemas.phaseTransitionSchemaName,
             schema: AIStructuredSchemas.phaseTransitionSchema,
             onStreamProgress: onStreamProgress
@@ -320,21 +320,26 @@ actor AIService {
         weightKG: Double,
         targetWeightKG: Double,
         baseAnswers: [OnboardingInquiryAnswer],
+        voiceTranscript: String = "",
+        acousticSummary: String? = nil,
         reportText: String,
         hasTongueImage: Bool,
+        hasFaceImage: Bool = false,
         city: String,
         weatherTempC: Double,
         weatherCondition: String
     ) async throws -> AIGenerationResult<AIOnboardingFollowUpResponse> {
         let config = AIConfiguration.load()
-        AILog.info("AIService", "发起「建档十问歌自适应追问」 baseAnswers=\(baseAnswers.count), hasTongue=\(hasTongueImage)")
+        AILog.info("AIService", "发起「建档十问歌自适应追问」 baseAnswers=\(baseAnswers.count), hasVoice=\(!voiceTranscript.isEmpty), hasTongue=\(hasTongueImage), hasFace=\(hasFaceImage)")
 
         guard config.hasValidKey else {
             try await Task.sleep(for: .milliseconds(320))
             let demo = LocalContextPlanner.offlineOnboardingFollowUp(
                 baseAnswers: baseAnswers,
+                voiceTranscript: voiceTranscript,
                 reportText: reportText,
-                hasTongueImage: hasTongueImage
+                hasTongueImage: hasTongueImage,
+                hasFaceImage: hasFaceImage
             )
             return AIGenerationResult(payload: demo, source: .offlineDemo)
         }
@@ -344,8 +349,11 @@ actor AIService {
             weightKG: weightKG,
             targetWeightKG: targetWeightKG,
             baseAnswers: baseAnswers,
+            voiceTranscript: voiceTranscript,
+            acousticSummary: acousticSummary,
             reportText: reportText,
             hasTongueImage: hasTongueImage,
+            hasFaceImage: hasFaceImage,
             city: city,
             weatherTempC: weatherTempC,
             weatherCondition: weatherCondition
@@ -355,7 +363,7 @@ actor AIService {
             config: config,
             systemPrompt: AIPromptBuilder.systemPrompt,
             userPrompt: prompt,
-            image: nil,
+            images: [],
             schemaName: AIStructuredSchemas.onboardingFollowUpSchemaName,
             schema: AIStructuredSchemas.onboardingFollowUpSchema,
             onStreamProgress: { _ in }
@@ -371,8 +379,11 @@ actor AIService {
         dietaryPreferences: [String],
         fitnessPreferences: [String],
         allAnswers: [OnboardingInquiryAnswer],
+        voiceTranscript: String = "",
+        acousticSummary: String? = nil,
         reportText: String,
         tongueImage: UIImage?,
+        faceImage: UIImage? = nil,
         city: String,
         weatherTempC: Double,
         weatherCondition: String,
@@ -380,14 +391,14 @@ actor AIService {
         onStreamProgress: @Sendable (String) -> Void
     ) async throws -> AIGenerationResult<AIOnboardingConstitutionResponse> {
         let config = AIConfiguration.load()
-        AILog.info("AIService", "发起「建档四诊合参综合辨证」 answers=\(allAnswers.count), hasTongue=\(tongueImage != nil), provider=\(config.provider.rawValue)")
+        AILog.info("AIService", "发起「建档四诊合参综合辨证」 answers=\(allAnswers.count), hasVoice=\(!voiceTranscript.isEmpty), hasTongue=\(tongueImage != nil), hasFace=\(faceImage != nil), provider=\(config.provider.rawValue)")
 
         guard config.hasValidKey else {
             let demo = try await simulateStreaming(
                 steps: [
-                    "正在综合十问歌回答与 \(city) \(Int(weatherTempC.rounded()))°C 气象基线…",
-                    tongueImage != nil ? "正在融合自然光舌象苔色特征…" : "正在评估初筛置信度与试探校准需求…",
-                    "正在生成第 1 份专属顺时生活方案…"
+                    "正在综合十问歌与语音主诉、\(city) \(Int(weatherTempC.rounded()))°C 气象基线…",
+                    (tongueImage != nil || faceImage != nil) ? "正在融合自然光舌象与面色特征…" : "正在评估初筛置信度与试探校准需求…",
+                    "正在整理老中医初诊医嘱总结…"
                 ],
                 onStreamProgress: onStreamProgress
             ) {
@@ -399,8 +410,11 @@ actor AIService {
                     dietaryPreferences: dietaryPreferences,
                     fitnessPreferences: fitnessPreferences,
                     allAnswers: allAnswers,
+                    voiceTranscript: voiceTranscript,
+                    acousticSummary: acousticSummary,
                     reportText: reportText,
                     hasTongueImage: tongueImage != nil,
+                    hasFaceImage: faceImage != nil,
                     city: city,
                     weatherTempC: weatherTempC,
                     weatherCondition: weatherCondition,
@@ -418,19 +432,23 @@ actor AIService {
             dietaryPreferences: dietaryPreferences,
             fitnessPreferences: fitnessPreferences,
             allAnswers: allAnswers,
+            voiceTranscript: voiceTranscript,
+            acousticSummary: acousticSummary,
             reportText: reportText,
             hasTongueImage: tongueImage != nil,
+            hasFaceImage: faceImage != nil,
             city: city,
             weatherTempC: weatherTempC,
             weatherCondition: weatherCondition,
             weatherHumidity: weatherHumidity
         )
 
+        let attachedImages = [tongueImage, faceImage].compactMap { $0 }
         let payload: AIOnboardingConstitutionResponse = try await executeStructuredRequest(
             config: config,
             systemPrompt: AIPromptBuilder.systemPrompt,
             userPrompt: prompt,
-            image: tongueImage,
+            images: attachedImages,
             schemaName: AIStructuredSchemas.onboardingAssessmentSchemaName,
             schema: AIStructuredSchemas.onboardingAssessmentSchema,
             onStreamProgress: onStreamProgress
@@ -444,18 +462,18 @@ actor AIService {
         config: AIConfiguration,
         systemPrompt: String,
         userPrompt: String,
-        image: UIImage?,
+        images: [UIImage] = [],
         schemaName: String,
         schema: [String: Any],
         onStreamProgress: @Sendable (String) -> Void
     ) async throws -> T {
         let startedAt = Date()
-        let imageBase64 = image.flatMap { encodeJPEGDataURL(from: $0) }
+        let encodedImages = images.compactMap { encodeJPEGDataURL(from: $0) }
         let request = try buildURLRequest(
             config: config,
             systemPrompt: systemPrompt,
             userPrompt: userPrompt,
-            imageBase64: imageBase64,
+            encodedImages: encodedImages,
             schemaName: schemaName,
             schema: schema
         )
@@ -523,7 +541,7 @@ actor AIService {
         config: AIConfiguration,
         systemPrompt: String,
         userPrompt: String,
-        imageBase64: (mimeType: String, base64: String)?,
+        encodedImages: [(mimeType: String, base64: String)],
         schemaName: String,
         schema: [String: Any]
     ) throws -> URLRequest {
@@ -561,14 +579,15 @@ actor AIService {
             request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
 
             let userContent: Any
-            if let imageBase64 {
-                userContent = [
-                    ["type": "text", "text": userPrompt],
-                    [
+            if !encodedImages.isEmpty {
+                var items: [[String: Any]] = [["type": "text", "text": userPrompt]]
+                for img in encodedImages {
+                    items.append([
                         "type": "image_url",
-                        "image_url": ["url": "data:\(imageBase64.mimeType);base64,\(imageBase64.base64)"]
-                    ]
-                ]
+                        "image_url": ["url": "data:\(img.mimeType);base64,\(img.base64)"]
+                    ])
+                }
+                userContent = items
             } else {
                 userContent = userPrompt
             }
@@ -596,13 +615,13 @@ actor AIService {
             request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
 
             var contentBlocks: [[String: Any]] = []
-            if let imageBase64 {
+            for img in encodedImages {
                 contentBlocks.append([
                     "type": "image",
                     "source": [
                         "type": "base64",
-                        "media_type": imageBase64.mimeType,
-                        "data": imageBase64.base64
+                        "media_type": img.mimeType,
+                        "data": img.base64
                     ]
                 ])
             }
@@ -633,11 +652,11 @@ actor AIService {
             request.setValue(config.apiKey, forHTTPHeaderField: "x-goog-api-key")
 
             var parts: [[String: Any]] = [["text": userPrompt]]
-            if let imageBase64 {
+            for img in encodedImages {
                 parts.append([
                     "inline_data": [
-                        "mime_type": imageBase64.mimeType,
-                        "data": imageBase64.base64
+                        "mime_type": img.mimeType,
+                        "data": img.base64
                     ]
                 ])
             }

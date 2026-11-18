@@ -1400,18 +1400,20 @@ enum LocalContextPlanner {
 
     static func offlineOnboardingFollowUp(
         baseAnswers: [OnboardingInquiryAnswer],
+        voiceTranscript: String = "",
         reportText: String,
-        hasTongueImage: Bool
+        hasTongueImage: Bool,
+        hasFaceImage: Bool = false
     ) -> AIOnboardingFollowUpResponse {
-        if !reportText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasTongueImage {
+        if !reportText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasTongueImage && hasFaceImage {
             return AIOnboardingFollowUpResponse(
                 needFollowUp: false,
-                reasoningHint: "已结合体检/体质报告与自然光舌象照片，信息充分，可直接进入综合辨证。",
+                reasoningHint: "已结合体检/体质报告及自然光舌象、面色照片，四诊信息充分，可直接进入综合辨证。",
                 questions: []
             )
         }
 
-        let joined = baseAnswers.map(\.answer).joined(separator: " ")
+        let joined = "\(baseAnswers.map(\.answer).joined(separator: " ")) \(voiceTranscript)"
         var questions: [AITriageQuestionPayload] = []
 
         if joined.contains("上热下寒")
@@ -1458,15 +1460,19 @@ enum LocalContextPlanner {
         dietaryPreferences: [String],
         fitnessPreferences: [String],
         allAnswers: [OnboardingInquiryAnswer],
+        voiceTranscript: String = "",
+        acousticSummary: String? = nil,
         reportText: String,
         hasTongueImage: Bool,
+        hasFaceImage: Bool = false,
         city: String,
         weatherTempC: Double,
         weatherCondition: String,
         weatherHumidity: Double = 68.0
     ) -> AIOnboardingConstitutionResponse {
         let trimmedReport = reportText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let joinedAnswers = allAnswers.map(\.answer).joined(separator: " ")
+        let trimmedVoice = voiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        let joinedAnswers = "\(allAnswers.map(\.answer).joined(separator: " ")) \(trimmedVoice) \(acousticSummary ?? "")"
 
         let parsed = trimmedReport.isEmpty ? nil : ConstitutionReportParser.parse(text: trimmedReport)
         let bmi = heightCM > 0 ? weightKG / pow(heightCM / 100.0, 2) : 24.0
@@ -1551,11 +1557,11 @@ enum LocalContextPlanner {
         if (joinedAnswers.contains("吃凉") || joinedAnswers.contains("胀气")) && !secondary.contains("肠胃敏感") {
             secondary.append("肠胃敏感")
         }
-        if (joinedAnswers.contains("气短") || joinedAnswers.contains("易倦")) && !secondary.contains("轻微气虚") {
+        if (joinedAnswers.contains("气短") || joinedAnswers.contains("易倦") || joinedAnswers.contains("偏轻细")) && !secondary.contains("轻微气虚") {
             secondary.append("轻微气虚")
         }
 
-        // 计算置信度：基础 66%，+ 报告 18%，+ 舌象 14%，+ 深度追问 6%
+        // 计算置信度：基础 66%，+ 报告 18%，+ 舌象 14%，+ 面色 8%，+ 语音口述 6%，+ 深度追问 6%
         var confidence = 66
         if parsed != nil && !(parsed?.constitutionTags.isEmpty ?? true) {
             confidence += 18
@@ -1563,10 +1569,16 @@ enum LocalContextPlanner {
         if hasTongueImage {
             confidence += 14
         }
+        if hasFaceImage {
+            confidence += 8
+        }
+        if !trimmedVoice.isEmpty {
+            confidence += 6
+        }
         if allAnswers.count >= 5 {
             confidence += 6
         }
-        confidence = min(92, confidence)
+        confidence = min(94, confidence)
 
         let needsTrial = confidence < 82
         if !needsTrial {

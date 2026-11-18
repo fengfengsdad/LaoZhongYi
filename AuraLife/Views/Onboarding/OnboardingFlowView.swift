@@ -132,7 +132,13 @@ struct OnboardingFlowView: View {
     @State private var isRecognizingReport: Bool = false
     @State private var tongueImage: UIImage?
     @State private var tongueQuality: TonguePhotoQuality?
+    @State private var faceImage: UIImage?
+    @State private var faceQuality: TonguePhotoQuality?
+    @State private var activeCaptureMode: DiagnosticCaptureMode = .tongue
     @State private var isShowingTongueCapture: Bool = false
+    @State private var voiceTranscript: String = ""
+    @State private var voiceAcousticSummary: String?
+    private var speechService = SpeechDiagnosisService.shared
 
     // Step 3
     @State private var city: String = "深圳"
@@ -213,9 +219,15 @@ struct OnboardingFlowView: View {
                 bottomActionBar
             }
             .sheet(isPresented: $isShowingTongueCapture) {
-                TongueCaptureSheet { image, quality in
-                    tongueImage = image
-                    tongueQuality = quality
+                TongueCaptureSheet(mode: activeCaptureMode) { image, quality in
+                    switch activeCaptureMode {
+                    case .tongue:
+                        tongueImage = image
+                        tongueQuality = quality
+                    case .face:
+                        faceImage = image
+                        faceQuality = quality
+                    }
                 }
             }
             .sheet(isPresented: $isShowingAISettings) {
@@ -494,7 +506,9 @@ struct OnboardingFlowView: View {
                 reportImportCard
             }
 
+            voiceInquiryCard
             tongueCaptureCard
+            faceCaptureCard
         }
     }
 
@@ -733,6 +747,7 @@ struct OnboardingFlowView: View {
 
                         HStack(spacing: 10) {
                             Button("重拍 / 更换") {
+                                activeCaptureMode = .tongue
                                 isShowingTongueCapture = true
                             }
                             .font(.caption.weight(.semibold))
@@ -753,6 +768,7 @@ struct OnboardingFlowView: View {
                     .foregroundStyle(AuraTheme.secondaryText)
 
                 Button {
+                    activeCaptureMode = .tongue
                     isShowingTongueCapture = true
                 } label: {
                     Label("拍摄 / 上传标准化舌象", systemImage: "camera.viewfinder")
@@ -761,6 +777,181 @@ struct OnboardingFlowView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(AuraTheme.sageGreen.opacity(0.13), in: Capsule())
+                }
+            }
+        }
+        .padding(16)
+        .background(AuraTheme.cardSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AuraTheme.hairline, lineWidth: 1))
+    }
+
+    private var voiceInquiryCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("闻诊加分项：语音口述近况", systemImage: "waveform.and.mic")
+                    .font(.headline)
+                    .foregroundStyle(AuraTheme.primaryText)
+
+                Spacer()
+
+                Text(voiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "可选 · +6%置信度" : "已记录")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(voiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AuraTheme.warmGinger : AuraTheme.sageGreen)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background((voiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AuraTheme.warmGinger : AuraTheme.sageGreen).opacity(0.14), in: Capsule())
+            }
+
+            Text("懒得打字时，可直接口述 10～15 秒（如“最近下午老发困、吹空调腰发紧”），系统会同步分析声息强弱与症状线索。")
+                .font(.caption)
+                .foregroundStyle(AuraTheme.secondaryText)
+
+            if speechService.isRecording {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                    Text(String(format: "正在聆听口述 %.1fs…", speechService.elapsedSeconds))
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(AuraTheme.primaryText)
+
+                    GeometryReader { geo in
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(AuraTheme.sageGreen.opacity(0.25))
+                            .overlay(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(AuraTheme.sageGreen)
+                                    .frame(width: max(6, geo.size.width * speechService.normalizedLevel))
+                            }
+                    }
+                    .frame(height: 8)
+                }
+                .padding(.vertical, 4)
+            }
+
+            if !voiceTranscript.isEmpty {
+                TextField("语音转写内容（可直接微调修改）", text: $voiceTranscript, axis: .vertical)
+                    .font(.subheadline)
+                    .lineLimit(2...5)
+                    .padding(10)
+                    .background(AuraTheme.subtleSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+
+            if let summary = voiceAcousticSummary, !summary.isEmpty {
+                Text(summary)
+                    .font(.caption2)
+                    .foregroundStyle(AuraTheme.inkSlate)
+            }
+
+            if let err = speechService.errorMessage {
+                Text(err)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    Task {
+                        await speechService.toggleRecording { liveText in
+                            voiceTranscript = liveText
+                        }
+                        if !speechService.isRecording {
+                            voiceAcousticSummary = speechService.acousticSummary
+                        }
+                    }
+                } label: {
+                    Label(
+                        speechService.isRecording ? "停止口述" : (voiceTranscript.isEmpty ? "开始语音口述" : "重新语音口述"),
+                        systemImage: speechService.isRecording ? "stop.circle.fill" : "mic.fill"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(speechService.isRecording ? Color.red.opacity(0.85) : AuraTheme.inkSlate, in: Capsule())
+                }
+
+                if !voiceTranscript.isEmpty && !speechService.isRecording {
+                    Button("清空") {
+                        voiceTranscript = ""
+                        voiceAcousticSummary = nil
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(AuraTheme.secondaryText)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(AuraTheme.subtleSurface, in: Capsule())
+                }
+            }
+        }
+        .padding(16)
+        .background(AuraTheme.cardSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AuraTheme.hairline, lineWidth: 1))
+    }
+
+    private var faceCaptureCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("望诊加分项：自然光素颜面色", systemImage: "face.smiling")
+                    .font(.headline)
+                    .foregroundStyle(AuraTheme.primaryText)
+
+                Spacer()
+
+                Text(faceImage == nil ? "可选 · +8%置信度" : "已采集")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(faceImage == nil ? AuraTheme.warmGinger : AuraTheme.sageGreen)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background((faceImage == nil ? AuraTheme.warmGinger : AuraTheme.sageGreen).opacity(0.14), in: Capsule())
+            }
+
+            if let faceImage {
+                HStack(spacing: 12) {
+                    Image(uiImage: faceImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 58, height: 58)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(faceQuality?.statusText ?? "面色照片已就绪")
+                            .font(.caption)
+                            .foregroundStyle(AuraTheme.primaryText)
+                            .lineLimit(2)
+
+                        HStack(spacing: 10) {
+                            Button("重拍 / 更换") {
+                                activeCaptureMode = .face
+                                isShowingTongueCapture = true
+                            }
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AuraTheme.sageGreen)
+
+                            Button("移除") {
+                                self.faceImage = nil
+                                self.faceQuality = nil
+                            }
+                            .font(.caption)
+                            .foregroundStyle(AuraTheme.secondaryText)
+                        }
+                    }
+                }
+            } else {
+                Text("素颜自然白光下辅助观察面色光泽、浮肿或两颧潮红倾向（如带妆可跳过）。")
+                    .font(.caption)
+                    .foregroundStyle(AuraTheme.secondaryText)
+
+                Button {
+                    activeCaptureMode = .face
+                    isShowingTongueCapture = true
+                } label: {
+                    Label("拍摄 / 上传自然光素颜面色", systemImage: "person.crop.circle")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AuraTheme.inkSlate)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(AuraTheme.inkSlate.opacity(0.13), in: Capsule())
                 }
             }
         }
@@ -1100,7 +1291,10 @@ struct OnboardingFlowView: View {
             if diagnosisMode == .adaptiveInquiry {
                 return allBaseAnswered && allFollowUpAnswered
             }
-            return !reportText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || tongueImage != nil
+            return !reportText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || tongueImage != nil
+                || faceImage != nil
+                || !voiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .permissions:
             return true
         case .assessment:
@@ -1118,6 +1312,10 @@ struct OnboardingFlowView: View {
             }
 
         case .diagnosis:
+            if speechService.isRecording {
+                speechService.stopRecording()
+                voiceAcousticSummary = speechService.acousticSummary
+            }
             if diagnosisMode == .adaptiveInquiry && followUpResponse == nil {
                 isCheckingFollowUp = true
                 defer { isCheckingFollowUp = false }
@@ -1128,8 +1326,11 @@ struct OnboardingFlowView: View {
                         weightKG: weightKG,
                         targetWeightKG: targetWeightKG,
                         baseAnswers: orderedBase,
+                        voiceTranscript: voiceTranscript,
+                        acousticSummary: voiceAcousticSummary ?? speechService.acousticSummary,
                         reportText: reportText,
                         hasTongueImage: tongueImage != nil,
+                        hasFaceImage: faceImage != nil,
                         city: city,
                         weatherTempC: weatherTempC,
                         weatherCondition: weatherCondition
@@ -1229,8 +1430,11 @@ struct OnboardingFlowView: View {
                 dietaryPreferences: selectedDietPrefs,
                 fitnessPreferences: selectedFitnessPrefs,
                 allAnswers: orderedAllAnswers(),
+                voiceTranscript: voiceTranscript,
+                acousticSummary: voiceAcousticSummary ?? speechService.acousticSummary,
                 reportText: reportText,
                 tongueImage: tongueImage,
+                faceImage: faceImage,
                 city: city,
                 weatherTempC: weatherTempC,
                 weatherCondition: weatherCondition,
@@ -1254,7 +1458,9 @@ struct OnboardingFlowView: View {
 
         let methodParts: [String] = [
             diagnosisMode == .adaptiveInquiry ? "4+2辨证" : "报告导入",
-            tongueImage != nil ? "舌象" : nil
+            !voiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "语音" : nil,
+            tongueImage != nil ? "舌象" : nil,
+            faceImage != nil ? "面色" : nil
         ].compactMap { $0 }
 
         let trimmedNote = constraintNote.trimmingCharacters(in: .whitespacesAndNewlines)

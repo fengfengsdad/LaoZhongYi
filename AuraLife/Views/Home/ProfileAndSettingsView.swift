@@ -13,6 +13,7 @@ struct ProfileAndSettingsView: View {
     @State private var isShowingNotifications: Bool = false
     @State private var isShowingAISettings: Bool = false
     @State private var isShowingAILogs: Bool = false
+    @State private var captureMode: DiagnosticCaptureMode = .tongue
     @State private var isShowingTongueCapture: Bool = false
     @State private var isAILiveConfigured: Bool = AIConfiguration.load().hasValidKey
     @State private var isNotificationsEnabled: Bool = NotificationPreferences.load().isEnabled
@@ -101,8 +102,9 @@ struct ProfileAndSettingsView: View {
                 AILogSheet()
             }
             .sheet(isPresented: $isShowingTongueCapture) {
-                TongueCaptureSheet { _, quality in
-                    showToast("舌象照度评估：\(quality.isWarning ? "光线欠佳，建议重拍" : "自然光良好")")
+                TongueCaptureSheet(mode: captureMode) { _, quality in
+                    let label = captureMode == .tongue ? "舌象" : "面色"
+                    showToast("\(label)照度评估：\(quality.isWarning ? "光线欠佳，建议重拍" : "自然光良好")")
                 }
             }
         }
@@ -205,6 +207,17 @@ struct ProfileAndSettingsView: View {
                 title: "自然光舌象拍摄质检",
                 subtitle: "校验光线照度，辅助对比舌苔变化"
             ) {
+                captureMode = .tongue
+                isShowingTongueCapture = true
+            }
+
+            settingRowButton(
+                icon: "face.smiling",
+                tint: AuraTheme.warmGinger,
+                title: "自然光素颜面色自检",
+                subtitle: "校验自然光照度，辅助观察面色光泽与浮肿"
+            ) {
+                captureMode = .face
                 isShowingTongueCapture = true
             }
         }

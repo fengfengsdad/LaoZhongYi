@@ -16,6 +16,7 @@ struct QuickCheckInBar: View {
 
     @FocusState private var isFocused: Bool
     @State private var showQuickChips: Bool = false
+    private var speechService = SpeechDiagnosisService.shared
 
     private let quickPrompts = [
         "中午聚餐吃多了 / 没按计划吃",
@@ -32,6 +33,45 @@ struct QuickCheckInBar: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            if speechService.isRecording {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                    Text(String(format: "正在聆听口述 %.1fs…", speechService.elapsedSeconds))
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(AuraTheme.primaryText)
+
+                    GeometryReader { geo in
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(AuraTheme.sageGreen.opacity(0.25))
+                            .overlay(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(AuraTheme.sageGreen)
+                                    .frame(width: max(6, geo.size.width * speechService.normalizedLevel))
+                            }
+                    }
+                    .frame(height: 6)
+
+                    Button("完成") {
+                        speechService.stopRecording()
+                    }
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(AuraTheme.sageGreen)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(AuraTheme.cardSurface, in: Capsule())
+                .overlay(Capsule().stroke(Color.red.opacity(0.35), lineWidth: 1))
+                .padding(.horizontal, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let speechError = speechService.errorMessage {
+                Text(speechError)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 16)
+            }
+
             if isProcessing, let streamingStatus {
                 Button(action: onTapLogs) {
                     HStack(spacing: 8) {
@@ -176,19 +216,38 @@ struct QuickCheckInBar: View {
 
                 Button {
                     HapticFeedback.impact(.light)
+                    Task {
+                        await speechService.toggleRecording { liveText in
+                            inputText = liveText
+                        }
+                    }
+                } label: {
+                    Image(systemName: speechService.isRecording ? "stop.circle.fill" : "mic.fill")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(speechService.isRecording ? Color.red : AuraTheme.secondaryText)
+                        .frame(width: 30, height: 30)
+                }
+                .disabled(isProcessing)
+                .accessibilityLabel(speechService.isRecording ? "停止语音口述" : "语音口述状态打卡")
+
+                Button {
+                    HapticFeedback.impact(.light)
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
                         showQuickChips.toggle()
                     }
                 } label: {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 15, weight: .medium))
+                    Image(systemName: "text.bubble")
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(showQuickChips ? AuraTheme.warmGinger : AuraTheme.secondaryText)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 30, height: 30)
                 }
                 .disabled(isProcessing)
                 .accessibilityLabel("展开常用状态快捷词")
 
                 Button {
+                    if speechService.isRecording {
+                        speechService.stopRecording()
+                    }
                     HapticFeedback.impact(.medium)
                     onSubmit()
                     isFocused = false

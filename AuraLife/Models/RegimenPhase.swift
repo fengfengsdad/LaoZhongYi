@@ -179,6 +179,10 @@ final class RegimenPhase {
     var statusRawValue: String
     var triggerSummary: String
     var lastFollowUpDate: Date?
+    var greenLightFoods: [String] = []
+    var yellowLightFoods: [String] = []
+    var redLightFoods: [String] = []
+    var dietaryFlexibilityNote: String = "推荐菜单仅作示范，吃七八分饱即可；饿了可从绿灯加餐，不必硬扛。"
     var updatedAt: Date
 
     var stageKind: RegimenStageKind {
@@ -203,6 +207,10 @@ final class RegimenPhase {
         status: RegimenPhaseStatus = .active,
         triggerSummary: String = "基于初始体质画像建立",
         lastFollowUpDate: Date? = nil,
+        greenLightFoods: [String] = [],
+        yellowLightFoods: [String] = [],
+        redLightFoods: [String] = [],
+        dietaryFlexibilityNote: String = "推荐菜单仅作示范，吃七八分饱即可；饿了可从绿灯加餐，不必硬扛。",
         updatedAt: Date = .now
     ) {
         self.id = id
@@ -216,7 +224,45 @@ final class RegimenPhase {
         self.statusRawValue = status.rawValue
         self.triggerSummary = triggerSummary
         self.lastFollowUpDate = lastFollowUpDate
+        self.greenLightFoods = greenLightFoods
+        self.yellowLightFoods = yellowLightFoods
+        self.redLightFoods = redLightFoods
+        self.dietaryFlexibilityNote = dietaryFlexibilityNote
         self.updatedAt = updatedAt
+    }
+
+    var resolvedDietaryBoundary: (green: [String], yellow: [String], red: [String], flexibility: String) {
+        if !greenLightFoods.isEmpty || !redLightFoods.isEmpty {
+            return (
+                greenLightFoods,
+                yellowLightFoods.isEmpty ? ["精制米面减半", "温和水果少量"] : yellowLightFoods,
+                redLightFoods,
+                dietaryFlexibilityNote
+            )
+        }
+        switch stageKind {
+        case .acuteRelief:
+            return (
+                ["温热小米粥", "蒸山药/南瓜", "水煮蛋/嫩豆腐", "焦米陈皮水"],
+                ["去皮鸡肉丝", "温软米饭半碗"],
+                ["冰饮冷食", "螃蟹等寒凉海鲜", "辛辣油炸", "生冷沙拉水果"],
+                "急症护胃期重在减轻消化负担，吃不惯可换成温粥+蒸蛋，饿了喝温热米汤或吃两块蒸山药，千万别硬饿。"
+            )
+        case .dampnessClearing:
+            return (
+                ["冬瓜/丝瓜/苦瓜", "嫩豆腐/去皮鸡肉", "炒薏米陈皮茶", "清蒸鱼虾（不忌口时）"],
+                ["杂粮饭半碗", "贝贝南瓜/玉米"],
+                ["奶茶甜食", "油炸烧烤", "冰镇啤酒/冷饮", "粘腻糯米糕点"],
+                "这阶段的菜谱只是省心示范，只要做到「温热 + 清淡少油 + 优质蛋白」，聚餐或外卖换同类菜完全算达标。"
+            )
+        case .tonifying, .maintenance:
+            return (
+                ["水煮蛋/蒸蛋", "温热无糖豆浆", "蒸山药/玉米", "清炖瘦肉/鸡胸/豆腐", "时令温热绿叶菜"],
+                ["糙米/杂粮饭半碗", "常温微甜水果少量"],
+                ["冰镇饮品", "高糖奶茶糕点", "宵夜烧烤炸物", "过量寒凉海鲜"],
+                "不必把推荐食谱当考卷：按推荐吃到七八分饱，两餐间或晚间还饿时直接从绿灯区补一点蛋白或山药，偶尔聚餐偏离，下一餐清淡拉回即可。"
+            )
+        }
     }
 
     func dayNumber(for date: Date = .now) -> Int {

@@ -136,6 +136,15 @@ struct SwipeableActionCard: View {
                     .padding(.vertical, 4)
                     .background(accentColor.opacity(0.13), in: Capsule())
 
+                if card.category == .diet {
+                    Text("参考示范")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(AuraTheme.secondaryText)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(AuraTheme.subtleSurface, in: Capsule())
+                }
+
                 Spacer()
 
                 Button {
@@ -199,6 +208,32 @@ struct SwipeableActionCard: View {
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AuraTheme.subtleSurface.opacity(0.85), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("核心原则：\(resolvedCorePrinciple)")
+                        .font(.caption)
+                        .foregroundStyle(AuraTheme.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("弹性/加餐：\(resolvedFlexibleSwapHint)")
+                        .font(.caption2)
+                        .foregroundStyle(AuraTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            } else if card.category == .diet {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text("轻点卡片看核心原则与饿了怎么加餐")
+                        .font(.caption2)
+                }
+                .foregroundStyle(AuraTheme.secondaryText.opacity(0.75))
+            }
         }
         .padding(14)
         .background(AuraTheme.cardSurface)
@@ -219,6 +254,30 @@ struct SwipeableActionCard: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 isExpanded.toggle()
             }
+        }
+    }
+
+    private var resolvedCorePrinciple: String {
+        if !card.corePrinciple.isEmpty { return card.corePrinciple }
+        switch card.category {
+        case .diet:
+            return "温热 + 优质蛋白 + 少油少甜，吃七八分饱即算达标"
+        case .fitness:
+            return "护膝低冲击、微汗通络不透支"
+        case .lifestyle:
+            return "顺应夜间阴血潜藏节奏，助次日精力恢复"
+        }
+    }
+
+    private var resolvedFlexibleSwapHint: String {
+        if !card.flexibleSwapHint.isEmpty { return card.flexibleSwapHint }
+        switch card.category {
+        case .diet:
+            return "不必死守菜名！吃不惯可换同类清炖/白灼蛋白；真饿了从「调养」页绿灯区加餐，不必硬扛。"
+        case .fitness:
+            return "太忙或天冷时，改成室内 15 分钟八段锦或靠墙静蹲同样有效。"
+        case .lifestyle:
+            return "太累时简化成热水泡脚 10 分钟后早睡即可。"
         }
     }
 

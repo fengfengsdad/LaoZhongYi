@@ -123,7 +123,24 @@ enum DietaryAdaptationHelper {
         diningEnvironment: String,
         dietaryPreferences: [String]
     ) -> AIPlannedCardPayload {
-        guard payload.resolvedCategory == .diet else { return payload }
+        if payload.resolvedCategory != .diet {
+            let defaultCore = payload.corePrinciple.isEmpty
+                ? (payload.resolvedCategory == .fitness ? "护膝微汗不透支，顺应今日气候" : "温足安神，顺应夜间修复节律")
+                : payload.corePrinciple
+            let defaultSwap = payload.flexibleSwapHint.isEmpty
+                ? (payload.resolvedCategory == .fitness ? "忙碌或累了可改成室内 15 分钟拉伸或八段锦。" : "太困时简化成热水泡脚 10 分钟后早睡即可。")
+                : payload.flexibleSwapHint
+            return AIPlannedCardPayload(
+                category: payload.category,
+                timeSlot: payload.timeSlot,
+                title: payload.title,
+                actionDetail: payload.actionDetail,
+                reasoning: payload.reasoning,
+                corePrinciple: defaultCore,
+                flexibleSwapHint: defaultSwap
+            )
+        }
+
         let adapted = adaptCard(
             title: payload.title,
             detail: payload.actionDetail,
@@ -132,13 +149,41 @@ enum DietaryAdaptationHelper {
             diningEnvironment: diningEnvironment,
             dietaryPreferences: dietaryPreferences
         )
+        let defaultCore = payload.corePrinciple.isEmpty
+            ? inferDietCorePrinciple(for: payload.timeSlot)
+            : payload.corePrinciple
+        let defaultSwap = payload.flexibleSwapHint.isEmpty
+            ? inferDietSwapHint(for: payload.timeSlot)
+            : payload.flexibleSwapHint
         return AIPlannedCardPayload(
             category: payload.category,
             timeSlot: payload.timeSlot,
             title: adapted.title,
             actionDetail: adapted.detail,
-            reasoning: adapted.reasoning
+            reasoning: adapted.reasoning,
+            corePrinciple: defaultCore,
+            flexibleSwapHint: defaultSwap
         )
+    }
+
+    private static func inferDietCorePrinciple(for timeSlot: String) -> String {
+        if timeSlot.contains("08:") || timeSlot.contains("09:") {
+            return "先垫温热谷物与蛋白，再小口喝顺时茶饮"
+        }
+        if timeSlot.contains("18:") || timeSlot.contains("19:") {
+            return "晚餐温软、优质蛋白配绿叶菜、主食减半"
+        }
+        return "温热 + 优质蛋白 + 少油少甜，吃七八分饱"
+    }
+
+    private static func inferDietSwapHint(for timeSlot: String) -> String {
+        if timeSlot.contains("08:") || timeSlot.contains("09:") {
+            return "买不到可换成热豆浆/燕麦粥配鸡蛋；上午饿了加半根蒸玉米或几颗坚果。"
+        }
+        if timeSlot.contains("18:") || timeSlot.contains("19:") {
+            return "只是推荐示范！睡前若还饿，喝半杯热无糖豆浆或吃1个蒸蛋，别硬扛。"
+        }
+        return "不用死扣菜名，同类清炖/白灼蛋白配时蔬都算达标；偏离了晚上顺回来即可。"
     }
 
     private static func replaceProteinTokens(

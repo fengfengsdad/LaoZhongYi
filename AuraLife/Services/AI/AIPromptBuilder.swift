@@ -168,9 +168,10 @@ enum AIPromptBuilder {
        - 运动适配：晴暖无大风（≥22°C、风速 < 22km/h 且无雨、无急症）可安排室外游泳；低温（<20°C）、大风、下雨或高湿闷热（湿度≥85%）自动切换为居家抗阻或传统导引；讨厌跑步时绝不推荐跑步有氧。
        - 忌口绝对禁止：凡 `dietaryPreferences` 包含忌海鲜、素食、忌牛奶/乳制品、忌牛羊肉、忌辛辣等，严禁生成对应食材。
        - 就餐场景落地：当 `diningEnvironment` 为「外卖」或「食堂」时，**严禁要求用户开火炖煮 40 分钟药膳汤或炒药材**，必须给出可直接点餐/打菜的菜单选择、备注指令（如少油免辣、汤水涮去浮油）及免煮便携冲泡茶包；早上必须安排「温热早餐 + 顺时饮」，严禁让气虚/脾胃弱者一上午只空腹喝茶水。
-    3. 立法统领与循证可解释 (Principle & Explainable Reasoning)：
-       - 每次规划或阶段切换都必须明确 `phaseSpec`（包含四期分类 `stageKind`、阶段名称、10~28字治法总则 `therapeuticPrinciple`、预计天数 `plannedDays`、可感知的转段标准 `exitCriteria` 及下一阶段去向 `nextStageHint`）。
-       - 每张卡片的 `reasoning` 字段必须用大白话、不超过 30 个汉字，体现它如何服务当前治法总则并结合体质或天气。
+    3. 立法统领与防焦虑减压 (Principle, Explainable Reasoning & Flexibility)：
+       - 每次规划或阶段切换都必须明确 `phaseSpec`（包含四期分类 `stageKind`、阶段名称、10~28字治法总则 `therapeuticPrinciple`、预计天数 `plannedDays`、可感知的转段标准 `exitCriteria`、下一阶段去向 `nextStageHint`，以及 `dietaryBoundary` 饮食红绿灯：绿灯放心吃/加餐、黄灯减量、红灯尽量避开与弹性说明）。
+       - 每张卡片的 `reasoning` 字段必须用大白话、不超过 30 个汉字；`corePrinciple` 用一句大白话点明本餐/本运动核心原则（如“温热+优质蛋白+少油”）；`flexibleSwapHint` 告诉用户吃不惯可换成什么、饿了能加餐什么，严禁制造“必须照单全收”的焦虑。
+       - 若用户输入偏离计划（如“聚餐吃多了”“吃重口火锅”“晚上还饿”），绝对不能指责，必须先共情安慰，再给出下一餐温和补救或绿灯安全加餐方案。
 
     输出规范：
     - 严格输出符合给定 JSON Schema 的纯 JSON，不要包含 Markdown 代码块或多余解释文字。
@@ -427,8 +428,9 @@ enum AIPromptBuilder {
 
         任务：
         1. 综合望诊（舌象）+ 问诊 + 地域气候给出 `primaryConstitution`（如“痰湿质74分”）与 `secondaryTags`，并诚实评估 `confidencePercent`（无报告无舌象一般在 65~75；有舌象或报告可达 80~90）。
-        2. 若置信度 < 80 或有兼夹待确认项，设 `needsThreeDayTrial = true`，在 `suggestedPhaseSpec` 中制定 3 天「初筛试探校准期」（以温和中庸的方案以方测证，观察 2～3 天后复诊提准）。
-        3. 生成第 1 日的 5 张 `initialDayCards`（早间温热早餐+顺时饮、午间正餐、下午导引/运动、傍晚轻食晚餐、睡前起居），严禁触犯用户忌口与运动黑名单，外卖/食堂场景严禁出现需现炖药膳汤，每张 `reasoning` ≤ 30 字。
+        2. 像老中医面对面交代一样，用大白话填好 `plainDiagnosis`（当前主要卡在什么问题）、`strategyOverview`（接下来分哪几步怎么调）、`expectedTimeline`（大概需要多久、第几天看什么变化来判断有效）以及 `suggestedPhaseSpec`（含 `dietaryBoundary` 饮食红绿灯边界）。
+        3. 若置信度 < 80 或有兼夹待确认项，设 `needsThreeDayTrial = true`，在 `suggestedPhaseSpec` 中制定 3 天「初筛试探校准期」（以温和中庸的方案以方测证，观察 2～3 天后复诊提准）。
+        4. 生成第 1 日的 5 张 `initialDayCards`（早间温热早餐+顺时饮、午间正餐、下午导引/运动、傍晚轻食晚餐、睡前起居），严禁触犯用户忌口与运动黑名单，外卖/食堂场景严禁出现需现炖药膳汤，每张需含 `corePrinciple`、`flexibleSwapHint` 与不超过 30 字的 `reasoning`。
         """
     }
 }

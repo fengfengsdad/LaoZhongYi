@@ -6,6 +6,17 @@
 
 ## [Unreleased] - develop
 
+### Added (三栏架构与防焦虑体验重构)
+- 新增 `MainTabView` 原生三栏主框架（`今日` / `调养` / `我的`），将今日执行与整体调养进度解耦；更新 `ContentView` 在完成建档后进入 `MainTabView`。
+- 新增 `RegimenProgressView`（「调养」Tab 主视图）：集中展示当前分期进度条、治法总则、转段标准与复诊入口、本阶段饮食红绿灯清单、临床四阶段路线图、体质偏颇分值走势及「调理医案 / 微调流水」档案。
+- 新增 `ProfileAndSettingsView`（「我的」Tab 主视图）：统一收口体征画像编辑与报告导入、城市气象与 HealthKit 同步、温和提醒设置、自然光舌象拍摄质检、AI 引擎配置与诊断日志，以及重新建档入口。
+- 在 `AIStructuredModels`、`AIStructuredSchemas`、`RegimenPhase` 与 `ActionCard` 中新增初诊医嘱总结字段（`plainDiagnosis`、`strategyOverview`、`expectedTimeline`）、饮食红绿灯边界 `AIDietaryBoundaryPayload`，以及卡片 `corePrinciple`（核心原则）与 `flexibleSwapHint`（弹性替代/加餐提示）。
+
+### Changed (三栏架构与防焦虑体验重构)
+- 重构 `OnboardingFlowView` Step 4 为专页「初诊医嘱总结页」：先用大白话交代当前主要问题、整体分步调理思路、大概周期与起效观察点及饮食红绿灯边界，再点击「明白思路，看今日具体安排」进入首页。
+- 极致精简首页 `RecoveryBannerView` 顶栏（移除原右上角 4 枚图标按钮），提升 `TodayTimelineView` 阅读呼吸感；点击分期或治则横条可直接跳转至「调养」Tab。
+- 升级 `SwipeableActionCard` 为饮食卡片增加「参考示范」标记，展开后展示「核心原则」与「弹性/加餐提示」；升级 `QuickCheckInBar` 与 `LocalContextPlanner` 新增「中午聚餐吃多了 / 没按计划吃」和「晚上还饿想加餐」零负罪感共情纠偏支持。
+
 ### Added (临床安全与生活化加固)
 - 新增 `RedFlagDetector` 与 `RedFlagWarningSheet`（支持 `#Preview`），并在 `AIStructuredModels`、`AIStructuredSchemas`、`AIPromptBuilder`、`TodayTimelineView` 与 `PhaseFollowUpSheet` 中接入 `redFlagWarning` 医疗红线熔断机制：命中黑便/便血、胸痛喘憋、剧烈腹痛/高热等高危信号时阻止推荐食疗或运动并建议线下就医（支持食物/铁剂染色误触二次确认）。
 - 新增 `DietaryAdaptationHelper`，统一在离线规划、复诊转段、建档与「换一换」中执行忌口食材替换（忌海鲜/素食/忌乳制品/忌牛羊肉/忌蛋/忌姜）及「外卖/食堂」真实可执行点餐方案改写（禁用需开火炖煮 40 分钟药膳汤）。

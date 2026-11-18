@@ -128,7 +128,9 @@ enum AIStructuredSchemas {
                             "timeSlot",
                             "updatedTitle",
                             "updatedDetail",
-                            "updatedReasoning"
+                            "updatedReasoning",
+                            "corePrinciple",
+                            "flexibleSwapHint"
                         ],
                         "properties": [
                             "dayOffset": [
@@ -145,7 +147,7 @@ enum AIStructuredSchemas {
                             ],
                             "timeSlot": [
                                 "type": "string",
-                                "description": "例如：上午 09:30 或 下午 17:00-17:30"
+                                "description": "例如：上午 08:00-09:00 或 下午 17:00-17:30"
                             ],
                             "updatedTitle": [
                                 "type": "string"
@@ -156,6 +158,14 @@ enum AIStructuredSchemas {
                             "updatedReasoning": [
                                 "type": "string",
                                 "description": "不超过30字的大白话解释，说明结合了哪项体质特征或天气因素"
+                            ],
+                            "corePrinciple": [
+                                "type": "string",
+                                "description": "一句话说明本餐或本运动的核心原则（例如：温热+优质蛋白+少油）"
+                            ],
+                            "flexibleSwapHint": [
+                                "type": "string",
+                                "description": "防焦虑提示：说明换哪些食材也算达标、饿了可加餐什么"
                             ]
                         ]
                     ]
@@ -168,13 +178,21 @@ enum AIStructuredSchemas {
         [
             "type": "object",
             "additionalProperties": false,
-            "required": ["title", "actionDetail", "reasoning"],
+            "required": ["title", "actionDetail", "reasoning", "corePrinciple", "flexibleSwapHint"],
             "properties": [
                 "title": ["type": "string"],
                 "actionDetail": ["type": "string"],
                 "reasoning": [
                     "type": "string",
                     "description": "不超过30字的大白话解释，说明结合了哪项体质特征或天气因素"
+                ],
+                "corePrinciple": [
+                    "type": "string",
+                    "description": "本项安排的核心原则（不超过24字）"
+                ],
+                "flexibleSwapHint": [
+                    "type": "string",
+                    "description": "可替换食材或防焦虑加餐提示"
                 ]
             ]
         ]
@@ -298,6 +316,9 @@ enum AIStructuredSchemas {
                 "confidencePercent",
                 "needsThreeDayTrial",
                 "clinicalSummary",
+                "plainDiagnosis",
+                "strategyOverview",
+                "expectedTimeline",
                 "suggestedPhaseSpec",
                 "initialDayCards",
                 "baselineDeltaSummary",
@@ -323,6 +344,18 @@ enum AIStructuredSchemas {
                 "clinicalSummary": [
                     "type": "string",
                     "description": "60字以内的初诊辨证小结，交代主兼体质、环境因素及是否需试探校准"
+                ],
+                "plainDiagnosis": [
+                    "type": "string",
+                    "description": "大白话像老中医面诊一样交代：你当前身体主要卡在什么问题（60字以内）"
+                ],
+                "strategyOverview": [
+                    "type": "string",
+                    "description": "大白话说明接下来的整体分步调理思路（先调什么、再调什么，70字以内）"
+                ],
+                "expectedTimeline": [
+                    "type": "string",
+                    "description": "说明大概需要多久、第几天看什么变化来判断有效（55字以内）"
                 ],
                 "suggestedPhaseSpec": phaseSpecSchema,
                 "initialDayCards": [
@@ -353,7 +386,8 @@ enum AIStructuredSchemas {
                 "therapeuticPrinciple",
                 "plannedDays",
                 "exitCriteria",
-                "nextStageHint"
+                "nextStageHint",
+                "dietaryBoundary"
             ],
             "properties": [
                 "stageKind": [
@@ -380,6 +414,32 @@ enum AIStructuredSchemas {
                 "nextStageHint": [
                     "type": "string",
                     "description": "达标后的下一调理阶段，如：转入祛邪疏通期，逐步恢复高蛋白与抗阻"
+                ],
+                "dietaryBoundary": [
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["greenLightFoods", "yellowLightLimit", "redLightAvoid", "flexibilityNote"],
+                    "properties": [
+                        "greenLightFoods": [
+                            "type": "array",
+                            "items": ["type": "string"],
+                            "description": "本阶段放心吃与饿了可加餐的3~5样安全食物"
+                        ],
+                        "yellowLightLimit": [
+                            "type": "array",
+                            "items": ["type": "string"],
+                            "description": "黄灯减量吃（如杂粮饭半碗、常温水果少量）"
+                        ],
+                        "redLightAvoid": [
+                            "type": "array",
+                            "items": ["type": "string"],
+                            "description": "红灯本阶段尽量避开的3~4样食物"
+                        ],
+                        "flexibilityNote": [
+                            "type": "string",
+                            "description": "一句缓解饮食焦虑的弹性说明（如饿了从绿灯加餐、不必死扣食谱）"
+                        ]
+                    ]
                 ]
             ]
         ]
@@ -389,7 +449,7 @@ enum AIStructuredSchemas {
         [
             "type": "object",
             "additionalProperties": false,
-            "required": ["category", "timeSlot", "title", "actionDetail", "reasoning"],
+            "required": ["category", "timeSlot", "title", "actionDetail", "reasoning", "corePrinciple", "flexibleSwapHint"],
             "properties": [
                 "category": [
                     "type": "string",
@@ -401,6 +461,14 @@ enum AIStructuredSchemas {
                 "reasoning": [
                     "type": "string",
                     "description": "不超过30字的大白话解释，说明结合了哪项体质特征或天气因素"
+                ],
+                "corePrinciple": [
+                    "type": "string",
+                    "description": "本餐或本运动的核心原则，说明做到什么就算达标"
+                ],
+                "flexibleSwapHint": [
+                    "type": "string",
+                    "description": "吃不惯时的安全替代建议或饿了如何加餐"
                 ]
             ]
         ]

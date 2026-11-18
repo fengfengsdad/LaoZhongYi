@@ -9,6 +9,8 @@ final class ActionCard {
     var title: String
     var actionDetail: String
     var reasoning: String
+    var corePrinciple: String = ""
+    var flexibleSwapHint: String = ""
     var isCompleted: Bool
     var sortOrder: Int
     var snapshot: DailyContextSnapshot?
@@ -25,6 +27,8 @@ final class ActionCard {
         title: String,
         actionDetail: String,
         reasoning: String,
+        corePrinciple: String = "",
+        flexibleSwapHint: String = "",
         isCompleted: Bool = false,
         sortOrder: Int = 0,
         snapshot: DailyContextSnapshot? = nil
@@ -35,6 +39,8 @@ final class ActionCard {
         self.title = title
         self.actionDetail = actionDetail
         self.reasoning = reasoning
+        self.corePrinciple = corePrinciple
+        self.flexibleSwapHint = flexibleSwapHint
         self.isCompleted = isCompleted
         self.sortOrder = sortOrder
         self.snapshot = snapshot

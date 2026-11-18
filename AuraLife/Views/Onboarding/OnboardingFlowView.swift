@@ -19,7 +19,7 @@ struct OnboardingFlowView: View {
             case .basics: return "基础体征与偏好"
             case .diagnosis: return "四诊合参辨体质"
             case .permissions: return "环境与顺时感知"
-            case .assessment: return "初诊方案生成"
+            case .assessment: return "初诊医嘱总结"
             }
         }
     }
@@ -919,10 +919,22 @@ struct OnboardingFlowView: View {
             } else if let result = assessmentResult {
                 let res = result.response
                 let stage = res.suggestedPhaseSpec.resolvedStageKind
+                let boundary = res.suggestedPhaseSpec.dietaryBoundary
 
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("初诊医嘱总结")
+                        .font(.system(.title2, design: .serif, weight: .semibold))
+                        .foregroundStyle(AuraTheme.primaryText)
+
+                    Text("先摸清身体现在的卡点、调理方向与预期周期，再看每天吃练什么会更从容。")
+                        .font(.subheadline)
+                        .foregroundStyle(AuraTheme.secondaryText)
+                }
+
+                // 1. 体质倾向与置信度
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text("初诊体质辨识结果")
+                        Text("初诊体质倾向")
                             .font(.headline)
                             .foregroundStyle(AuraTheme.primaryText)
 
@@ -936,28 +948,22 @@ struct OnboardingFlowView: View {
                             .background((res.clampedConfidence >= 80 ? AuraTheme.sageGreen : AuraTheme.warmGinger).opacity(0.14), in: Capsule())
                     }
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(res.allConstitutionTags, id: \.self) { tag in
-                                Text(tag)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(AuraTheme.warmGinger)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(AuraTheme.warmGinger.opacity(0.13), in: Capsule())
-                            }
+                    FlowLayout(spacing: 8, lineSpacing: 8) {
+                        ForEach(res.allConstitutionTags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AuraTheme.warmGinger)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(AuraTheme.warmGinger.opacity(0.13), in: Capsule())
                         }
                     }
-
-                    Text(res.clinicalSummary)
-                        .font(.subheadline)
-                        .foregroundStyle(AuraTheme.primaryText)
 
                     if res.needsThreeDayTrial {
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
                                 .foregroundStyle(AuraTheme.warmGinger)
-                            Text("已开启「前 3 天以方测证试探校准」：第 2 天将温和复诊，根据你的胃肠与精力反馈将置信度校准至 82%+。")
+                            Text("已开启「前 3 天以方测证试探校准」：先温和试探观察 2 天，复诊反馈后系统会自动纠偏并将置信度提至 82%+。")
                                 .font(.caption)
                                 .foregroundStyle(AuraTheme.primaryText)
                         }
@@ -965,60 +971,60 @@ struct OnboardingFlowView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(AuraTheme.warmGinger.opacity(0.11), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("初始阶段：\(res.suggestedPhaseSpec.phaseName)（\(stage.displayName)）")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(stage.accentColor)
-                        Text("治法总则：\(res.suggestedPhaseSpec.therapeuticPrinciple)")
-                            .font(.caption)
-                            .foregroundStyle(AuraTheme.secondaryText)
-                    }
                 }
                 .padding(16)
                 .background(AuraTheme.cardSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(stage.accentColor.opacity(0.35), lineWidth: 1))
 
-                Text("为你准备的首日 \(res.initialDayCards.count) 项顺时安排")
-                    .font(.headline)
-                    .foregroundStyle(AuraTheme.primaryText)
+                // 2. 当前主要问题是什么
+                consultAdvisoryCard(
+                    icon: "stethoscope",
+                    tint: AuraTheme.warmGinger,
+                    title: "1. 你现在主要卡在什么问题？",
+                    bodyText: res.plainDiagnosis,
+                    footerBadge: "依据：\(res.clinicalSummary)"
+                )
 
-                ForEach(Array(res.initialDayCards.enumerated()), id: \.offset) { _, card in
-                    let category = card.resolvedCategory
-                    let accent = AuraTheme.accent(for: category)
+                // 3. 整体调整思路与分期
+                consultAdvisoryCard(
+                    icon: "arrow.triangle.branch",
+                    tint: stage.accentColor,
+                    title: "2. 接下来的整体调整思路",
+                    bodyText: res.strategyOverview,
+                    footerBadge: "第 1 步：\(res.suggestedPhaseSpec.phaseName)（\(res.suggestedPhaseSpec.therapeuticPrinciple)）\n之后衔接：\(res.suggestedPhaseSpec.nextStageHint)"
+                )
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Label(category.displayName, systemImage: category.systemImage)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(accent)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(accent.opacity(0.12), in: Capsule())
+                // 4. 大概需要多久 & 怎么看效果
+                consultAdvisoryCard(
+                    icon: "calendar.badge.clock",
+                    tint: AuraTheme.inkSlate,
+                    title: "3. 大概需要多久、怎么看有效？",
+                    bodyText: res.expectedTimeline,
+                    footerBadge: "本阶段预计 \(res.suggestedPhaseSpec.normalizedPlannedDays) 天 · 转段信号：\(res.suggestedPhaseSpec.exitCriteria)"
+                )
 
-                            Text(card.timeSlot)
-                                .font(.caption2)
-                                .foregroundStyle(AuraTheme.secondaryText)
-                            Spacer()
-                        }
+                // 5. 饮食红绿灯边界（防焦虑）
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("4. 饮食红绿灯（不必死守推荐菜单）", systemImage: "leaf.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(AuraTheme.primaryText)
 
-                        Text(card.title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(AuraTheme.primaryText)
+                    Text(boundary.flexibilityNote)
+                        .font(.caption)
+                        .foregroundStyle(AuraTheme.primaryText)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AuraTheme.sageGreen.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                        Text(card.actionDetail)
-                            .font(.caption)
-                            .foregroundStyle(AuraTheme.secondaryText)
-
-                        Text("理由：\(card.clampedReasoning)")
-                            .font(.caption2)
-                            .foregroundStyle(accent)
+                    VStack(alignment: .leading, spacing: 8) {
+                        boundaryRow(label: "绿灯 · 放心吃 / 饿了可加餐", items: boundary.greenLightFoods, tint: AuraTheme.sageGreen)
+                        boundaryRow(label: "黄灯 · 适量减半", items: boundary.yellowLightLimit, tint: AuraTheme.warmGinger)
+                        boundaryRow(label: "红灯 · 本阶段尽量避开", items: boundary.redLightAvoid, tint: .red.opacity(0.82))
                     }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AuraTheme.cardSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(AuraTheme.hairline, lineWidth: 1))
                 }
+                .padding(16)
+                .background(AuraTheme.cardSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AuraTheme.hairline, lineWidth: 1))
             } else if let assessmentError {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("生成初诊方案时遇到问题：\(assessmentError)")
@@ -1082,7 +1088,7 @@ struct OnboardingFlowView: View {
         case .permissions:
             return "生成我的第 1 份顺时方案"
         case .assessment:
-            return isGeneratingAssessment ? "正在辨证生成…" : "开启顺时调理"
+            return isGeneratingAssessment ? "正在整理初诊医嘱…" : "明白思路，看今日具体安排"
         }
     }
 
@@ -1274,6 +1280,7 @@ struct OnboardingFlowView: View {
         modelContext.insert(profile)
 
         let phaseSpec = response.suggestedPhaseSpec
+        let boundary = phaseSpec.dietaryBoundary
         let phase = RegimenPhase(
             stageKind: phaseSpec.resolvedStageKind,
             phaseName: phaseSpec.phaseName,
@@ -1283,7 +1290,11 @@ struct OnboardingFlowView: View {
             startDate: .now,
             plannedDays: phaseSpec.normalizedPlannedDays,
             status: .active,
-            triggerSummary: "首次四诊建档（\(profile.assessmentMethod) · \(source.rawValue)）"
+            triggerSummary: "首次四诊建档（\(profile.assessmentMethod) · \(source.rawValue)）",
+            greenLightFoods: boundary.greenLightFoods,
+            yellowLightFoods: boundary.yellowLightLimit,
+            redLightFoods: boundary.redLightAvoid,
+            dietaryFlexibilityNote: boundary.flexibilityNote
         )
         modelContext.insert(phase)
 
@@ -1293,7 +1304,7 @@ struct OnboardingFlowView: View {
             stageKind: phase.stageKind,
             therapeuticPrinciple: phase.therapeuticPrinciple,
             outcomeTitle: "首次四诊建档",
-            clinicalNote: response.clinicalSummary,
+            clinicalNote: "\(response.plainDiagnosis) 思路：\(response.strategyOverview)",
             constitutionSnapshotTags: response.allConstitutionTags,
             deltaSummary: response.baselineDeltaSummary,
             toleranceNote: response.baselineToleranceNote
@@ -1319,12 +1330,19 @@ struct OnboardingFlowView: View {
 
         var cards: [ActionCard] = []
         for (index, item) in response.initialDayCards.enumerated() {
+            let adapted = DietaryAdaptationHelper.adaptPayload(
+                item,
+                diningEnvironment: diningEnvironment,
+                dietaryPreferences: selectedDietPrefs
+            )
             let card = ActionCard(
-                category: item.resolvedCategory,
-                timeSlot: item.timeSlot,
-                title: item.title,
-                actionDetail: item.actionDetail,
-                reasoning: item.clampedReasoning,
+                category: adapted.resolvedCategory,
+                timeSlot: adapted.timeSlot,
+                title: adapted.title,
+                actionDetail: adapted.actionDetail,
+                reasoning: adapted.clampedReasoning,
+                corePrinciple: adapted.corePrinciple,
+                flexibleSwapHint: adapted.flexibleSwapHint,
                 isCompleted: false,
                 sortOrder: index,
                 snapshot: snapshot
@@ -1411,6 +1429,55 @@ struct OnboardingFlowView: View {
         if let h = parsed.heightCM { heightCM = h }
         if let w = parsed.weightKG { weightKG = w }
         if let tw = parsed.targetWeightKG { targetWeightKG = tw }
+    }
+
+    private func consultAdvisoryCard(
+        icon: String,
+        tint: Color,
+        title: String,
+        bodyText: String,
+        footerBadge: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: icon)
+                .font(.headline)
+                .foregroundStyle(AuraTheme.primaryText)
+
+            Text(bodyText)
+                .font(.subheadline)
+                .foregroundStyle(AuraTheme.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(footerBadge)
+                .font(.caption)
+                .foregroundStyle(AuraTheme.secondaryText)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(tint.opacity(0.09), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .background(AuraTheme.cardSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(AuraTheme.hairline, lineWidth: 1))
+    }
+
+    private func boundaryRow(label: String, items: [String], tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+
+            FlowLayout(spacing: 6, lineSpacing: 6) {
+                ForEach(items, id: \.self) { item in
+                    Text(item)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(tint)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(tint.opacity(0.11), in: Capsule())
+                }
+            }
+        }
     }
 }
 

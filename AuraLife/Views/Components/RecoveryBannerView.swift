@@ -4,19 +4,12 @@ import SwiftUI
 struct RecoveryBannerView: View {
     let snapshot: DailyContextSnapshot
     let dayTitle: String
-    let profile: UserConstitutionProfile?
     let activePhase: RegimenPhase?
     let completedCount: Int
     let totalCount: Int
     let isGeneratingMultiDay: Bool
-    let isAILiveConfigured: Bool
-    let isNotificationsEnabled: Bool
     let onTapWeatherContext: () -> Void
     let onTapPhaseRoadmap: () -> Void
-    let onTapNotifications: () -> Void
-    let onTapProfile: () -> Void
-    let onTapHistory: () -> Void
-    let onTapAISettings: () -> Void
     let onGenerateMultiDay: () -> Void
 
     private var dateText: String {
@@ -72,48 +65,30 @@ struct RecoveryBannerView: View {
 
                 Spacer()
 
-                HStack(spacing: 8) {
-                    Button(action: onTapNotifications) {
-                        Image(systemName: isNotificationsEnabled ? "bell.badge.fill" : "bell")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(isNotificationsEnabled ? AuraTheme.sageGreen : AuraTheme.secondaryText)
-                            .frame(width: 34, height: 34)
-                            .background(AuraTheme.subtleSurface, in: Circle())
-                    }
-                    .accessibilityLabel("顺时温和提醒设置")
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text("已完成 \(completedCount)/\(totalCount)")
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(AuraTheme.sageGreen)
 
-                    Button(action: onTapAISettings) {
-                        Image(systemName: isAILiveConfigured ? "sparkles" : "gearshape")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(isAILiveConfigured ? AuraTheme.sageGreen : AuraTheme.secondaryText)
-                            .frame(width: 34, height: 34)
-                            .background(AuraTheme.subtleSurface, in: Circle())
-                    }
-                    .accessibilityLabel("AI 模型与接口设置")
-
-                    Button(action: onTapHistory) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(AuraTheme.secondaryText)
-                            .frame(width: 34, height: 34)
-                            .background(AuraTheme.subtleSurface, in: Circle())
-                    }
-                    .accessibilityLabel("动态调整记录")
-
-                    Button(action: onTapProfile) {
+                    Button(action: onGenerateMultiDay) {
                         HStack(spacing: 4) {
-                            Image(systemName: "person.text.rectangle")
-                                .font(.system(size: 13, weight: .medium))
-                            Text(profile?.primaryConstitution ?? "画像")
-                                .font(.caption.weight(.medium))
-                                .lineLimit(1)
+                            if isGeneratingMultiDay {
+                                ProgressView()
+                                    .controlSize(.mini)
+                                    .tint(AuraTheme.sageGreen)
+                            } else {
+                                Image(systemName: "calendar.badge.plus")
+                                    .font(.caption2.weight(.semibold))
+                            }
+                            Text(isGeneratingMultiDay ? "编排中" : "生成3日")
+                                .font(.caption2.weight(.semibold))
                         }
-                        .foregroundStyle(AuraTheme.primaryText)
+                        .foregroundStyle(AuraTheme.sageGreen)
                         .padding(.horizontal, 9)
-                        .frame(height: 34)
-                        .background(AuraTheme.subtleSurface, in: Capsule())
+                        .padding(.vertical, 5)
+                        .background(AuraTheme.sageGreen.opacity(0.13), in: Capsule())
                     }
-                    .accessibilityLabel("查看或导入体质画像")
+                    .disabled(isGeneratingMultiDay)
                 }
             }
 
@@ -153,13 +128,9 @@ struct RecoveryBannerView: View {
                     .background(phaseColor.opacity(0.12), in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("查看中医分期与治法路线")
+                .accessibilityLabel("前往调养页查看整体进度")
 
                 Spacer(minLength: 0)
-
-                Text("\(completedCount)/\(totalCount)")
-                    .font(.caption.monospacedDigit().weight(.medium))
-                    .foregroundStyle(AuraTheme.secondaryText)
             }
 
             Button(action: onTapPhaseRoadmap) {
@@ -184,55 +155,19 @@ struct RecoveryBannerView: View {
             }
             .buttonStyle(.plain)
 
-            HStack(spacing: 10) {
-                if !snapshot.userReportedSymptoms.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(snapshot.userReportedSymptoms, id: \.self) { symptom in
-                                Text(symptom)
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(AuraTheme.warmGinger)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(AuraTheme.warmGinger.opacity(0.12), in: Capsule())
-                            }
+            if !snapshot.userReportedSymptoms.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(snapshot.userReportedSymptoms, id: \.self) { symptom in
+                            Text(symptom)
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(AuraTheme.warmGinger)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(AuraTheme.warmGinger.opacity(0.12), in: Capsule())
                         }
                     }
-                } else {
-                    Button(action: onTapWeatherContext) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "humidity")
-                                .font(.caption2)
-                            Text(healthSummaryText)
-                                .font(.caption2)
-                                .lineLimit(1)
-                        }
-                        .foregroundStyle(AuraTheme.secondaryText)
-                    }
-                    .buttonStyle(.plain)
-
-                    Spacer(minLength: 0)
                 }
-
-                Button(action: onGenerateMultiDay) {
-                    HStack(spacing: 5) {
-                        if isGeneratingMultiDay {
-                            ProgressView()
-                                .controlSize(.mini)
-                                .tint(AuraTheme.sageGreen)
-                        } else {
-                            Image(systemName: "calendar.badge.plus")
-                                .font(.caption2.weight(.semibold))
-                        }
-                        Text(isGeneratingMultiDay ? "编排中" : "生成3日计划")
-                            .font(.caption2.weight(.semibold))
-                    }
-                    .foregroundStyle(AuraTheme.sageGreen)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(AuraTheme.sageGreen.opacity(0.13), in: Capsule())
-                }
-                .disabled(isGeneratingMultiDay)
             }
         }
         .padding(16)
@@ -242,26 +177,11 @@ struct RecoveryBannerView: View {
                 .stroke(AuraTheme.hairline, lineWidth: 1)
         )
     }
-
-    private var healthSummaryText: String {
-        var parts = ["湿度 \(Int(snapshot.weatherHumidity.rounded()))%"]
-        if let steps = snapshot.healthStepCount {
-            parts.append("\(steps) 步")
-        }
-        if let sleep = snapshot.healthSleepHours {
-            parts.append(String(format: "睡 %.1fh", sleep))
-        }
-        if parts.count == 1 {
-            parts.append("点此同步 HealthKit")
-        }
-        return parts.joined(separator: " · ")
-    }
 }
 
 #Preview {
     let container = PreviewSupport.makeContainer()
     let snapshots = (try? container.mainContext.fetch(FetchDescriptor<DailyContextSnapshot>())) ?? []
-    let profiles = (try? container.mainContext.fetch(FetchDescriptor<UserConstitutionProfile>())) ?? []
     let phases = (try? container.mainContext.fetch(FetchDescriptor<RegimenPhase>())) ?? []
 
     return ZStack {
@@ -270,19 +190,12 @@ struct RecoveryBannerView: View {
             RecoveryBannerView(
                 snapshot: snapshot,
                 dayTitle: "今日顺时调理",
-                profile: profiles.first,
                 activePhase: phases.first,
                 completedCount: 1,
-                totalCount: 4,
+                totalCount: 5,
                 isGeneratingMultiDay: false,
-                isAILiveConfigured: false,
-                isNotificationsEnabled: true,
                 onTapWeatherContext: {},
                 onTapPhaseRoadmap: {},
-                onTapNotifications: {},
-                onTapProfile: {},
-                onTapHistory: {},
-                onTapAISettings: {},
                 onGenerateMultiDay: {}
             )
             .padding()

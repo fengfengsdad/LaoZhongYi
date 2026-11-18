@@ -4,6 +4,8 @@ import SwiftUI
 import UIKit
 
 struct TodayTimelineView: View {
+    var onNavigateToCareTab: (() -> Void)? = nil
+
     @Environment(\.modelContext) private var modelContext
 
     @Query private var profiles: [UserConstitutionProfile]
@@ -94,19 +96,18 @@ struct TodayTimelineView: View {
                         RecoveryBannerView(
                             snapshot: snapshot,
                             dayTitle: dayHeadline(for: selectedDayIndex),
-                            profile: activeProfile,
                             activePhase: activeRegimenPhase,
                             completedCount: timelineCards.filter(\.isCompleted).count,
                             totalCount: timelineCards.count,
                             isGeneratingMultiDay: isGeneratingMultiDay,
-                            isAILiveConfigured: isAILiveConfigured,
-                            isNotificationsEnabled: isNotificationsEnabled,
                             onTapWeatherContext: { isShowingWeatherContext = true },
-                            onTapPhaseRoadmap: { isShowingPhaseRoadmap = true },
-                            onTapNotifications: { isShowingNotifications = true },
-                            onTapProfile: { isShowingProfile = true },
-                            onTapHistory: { isShowingHistory = true },
-                            onTapAISettings: { isShowingAISettings = true },
+                            onTapPhaseRoadmap: {
+                                if let onNavigateToCareTab {
+                                    onNavigateToCareTab()
+                                } else {
+                                    isShowingPhaseRoadmap = true
+                                }
+                            },
                             onGenerateMultiDay: {
                                 Task {
                                     await generateMultiDayPlan(baseSnapshot: snapshot)
@@ -710,13 +711,20 @@ struct TodayTimelineView: View {
                     targetSnapshot.actionCards.removeAll()
 
                     var newCards: [ActionCard] = []
-                    for (index, cardPayload) in dayPlan.cards.enumerated() {
+                    for (index, rawPayload) in dayPlan.cards.enumerated() {
+                        let cardPayload = DietaryAdaptationHelper.adaptPayload(
+                            rawPayload,
+                            diningEnvironment: activeProfile?.diningEnvironment ?? "居家做饭",
+                            dietaryPreferences: activeProfile?.dietaryPreferences ?? []
+                        )
                         let card = ActionCard(
                             category: cardPayload.resolvedCategory,
                             timeSlot: cardPayload.timeSlot,
                             title: cardPayload.title,
                             actionDetail: cardPayload.actionDetail,
                             reasoning: cardPayload.clampedReasoning,
+                            corePrinciple: cardPayload.corePrinciple,
+                            flexibleSwapHint: cardPayload.flexibleSwapHint,
                             isCompleted: false,
                             sortOrder: index,
                             snapshot: targetSnapshot
@@ -791,6 +799,12 @@ struct TodayTimelineView: View {
                     card.title = diff.updatedTitle
                     card.actionDetail = diff.updatedDetail
                     card.reasoning = diff.updatedReasoning
+                    if !diff.corePrinciple.isEmpty {
+                        card.corePrinciple = diff.corePrinciple
+                    }
+                    if !diff.flexibleSwapHint.isEmpty {
+                        card.flexibleSwapHint = diff.flexibleSwapHint
+                    }
                     card.isCompleted = false
                 } else {
                     let newCard = ActionCard(
@@ -799,6 +813,8 @@ struct TodayTimelineView: View {
                         title: diff.updatedTitle,
                         actionDetail: diff.updatedDetail,
                         reasoning: diff.updatedReasoning,
+                        corePrinciple: diff.corePrinciple,
+                        flexibleSwapHint: diff.flexibleSwapHint,
                         isCompleted: false,
                         sortOrder: diff.sortOrder,
                         snapshot: targetSnapshot
@@ -853,6 +869,12 @@ struct TodayTimelineView: View {
                 card.title = result.payload.title
                 card.actionDetail = result.payload.actionDetail
                 card.reasoning = result.payload.clampedReasoning
+                if !result.payload.corePrinciple.isEmpty {
+                    card.corePrinciple = result.payload.corePrinciple
+                }
+                if !result.payload.flexibleSwapHint.isEmpty {
+                    card.flexibleSwapHint = result.payload.flexibleSwapHint
+                }
                 card.isCompleted = false
             }
 
@@ -914,12 +936,17 @@ struct TodayTimelineView: View {
         let baseDay = Calendar.current.startOfDay(for: snapshot.date)
 
         withAnimation(.spring(response: 0.36, dampingFraction: 0.85)) {
+            let boundary = response.newPhaseSpec.dietaryBoundary
             let targetPhase: RegimenPhase
             if response.transitionDecision == "extendCurrentStage" {
                 currentPhase.therapeuticPrinciple = response.newPhaseSpec.therapeuticPrinciple
                 currentPhase.exitCriteria = response.newPhaseSpec.exitCriteria
                 currentPhase.nextStageHint = response.newPhaseSpec.nextStageHint
                 currentPhase.plannedDays = max(currentPhase.plannedDays, response.newPhaseSpec.normalizedPlannedDays)
+                currentPhase.greenLightFoods = boundary.greenLightFoods
+                currentPhase.yellowLightFoods = boundary.yellowLightLimit
+                currentPhase.redLightFoods = boundary.redLightAvoid
+                currentPhase.dietaryFlexibilityNote = boundary.flexibilityNote
                 currentPhase.status = .active
                 currentPhase.lastFollowUpDate = .now
                 currentPhase.updatedAt = .now
@@ -938,7 +965,11 @@ struct TodayTimelineView: View {
                     startDate: baseDay,
                     plannedDays: response.newPhaseSpec.normalizedPlannedDays,
                     status: .active,
-                    triggerSummary: "复诊评估（\(outcome.title)）"
+                    triggerSummary: "复诊评估（\(outcome.title)）",
+                    greenLightFoods: boundary.greenLightFoods,
+                    yellowLightFoods: boundary.yellowLightLimit,
+                    redLightFoods: boundary.redLightAvoid,
+                    dietaryFlexibilityNote: boundary.flexibilityNote
                 )
                 modelContext.insert(newPhase)
                 targetPhase = newPhase
@@ -955,13 +986,20 @@ struct TodayTimelineView: View {
             snapshot.actionCards.removeAll()
 
             var newCards: [ActionCard] = []
-            for (index, payload) in response.cards.enumerated() {
+            for (index, rawPayload) in response.cards.enumerated() {
+                let payload = DietaryAdaptationHelper.adaptPayload(
+                    rawPayload,
+                    diningEnvironment: activeProfile?.diningEnvironment ?? "居家做饭",
+                    dietaryPreferences: activeProfile?.dietaryPreferences ?? []
+                )
                 let card = ActionCard(
                     category: payload.resolvedCategory,
                     timeSlot: payload.timeSlot,
                     title: payload.title,
                     actionDetail: payload.actionDetail,
                     reasoning: payload.clampedReasoning,
+                    corePrinciple: payload.corePrinciple,
+                    flexibleSwapHint: payload.flexibleSwapHint,
                     isCompleted: false,
                     sortOrder: index,
                     snapshot: snapshot
@@ -1036,12 +1074,17 @@ struct TodayTimelineView: View {
         triggerSummary: String
     ) -> RegimenPhase {
         let resolvedStage = spec.resolvedStageKind
+        let boundary = spec.dietaryBoundary
         if let existing = activeRegimenPhase,
            existing.stageKind == resolvedStage && existing.phaseName == spec.phaseName {
             existing.therapeuticPrinciple = spec.therapeuticPrinciple
             existing.exitCriteria = spec.exitCriteria
             existing.nextStageHint = spec.nextStageHint
             existing.plannedDays = spec.normalizedPlannedDays
+            existing.greenLightFoods = boundary.greenLightFoods
+            existing.yellowLightFoods = boundary.yellowLightLimit
+            existing.redLightFoods = boundary.redLightAvoid
+            existing.dietaryFlexibilityNote = boundary.flexibilityNote
             existing.updatedAt = .now
             return existing
         }
@@ -1060,7 +1103,11 @@ struct TodayTimelineView: View {
             startDate: startDate,
             plannedDays: spec.normalizedPlannedDays,
             status: .active,
-            triggerSummary: triggerSummary
+            triggerSummary: triggerSummary,
+            greenLightFoods: boundary.greenLightFoods,
+            yellowLightFoods: boundary.yellowLightLimit,
+            redLightFoods: boundary.redLightAvoid,
+            dietaryFlexibilityNote: boundary.flexibilityNote
         )
         modelContext.insert(created)
         return created

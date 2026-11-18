@@ -10,7 +10,35 @@ struct CardAdjustmentDiff: Identifiable, Sendable {
     let updatedTitle: String
     let updatedDetail: String
     let updatedReasoning: String
+    let corePrinciple: String
+    let flexibleSwapHint: String
     let sortOrder: Int
+
+    init(
+        dayOffset: Int,
+        targetCardID: UUID?,
+        category: ActionCategory,
+        timeSlot: String,
+        previousTitle: String?,
+        updatedTitle: String,
+        updatedDetail: String,
+        updatedReasoning: String,
+        corePrinciple: String = "",
+        flexibleSwapHint: String = "",
+        sortOrder: Int
+    ) {
+        self.dayOffset = dayOffset
+        self.targetCardID = targetCardID
+        self.category = category
+        self.timeSlot = timeSlot
+        self.previousTitle = previousTitle
+        self.updatedTitle = updatedTitle
+        self.updatedDetail = updatedDetail
+        self.updatedReasoning = updatedReasoning
+        self.corePrinciple = corePrinciple
+        self.flexibleSwapHint = flexibleSwapHint
+        self.sortOrder = sortOrder
+    }
 
     var dayLabel: String {
         switch dayOffset {
@@ -123,6 +151,8 @@ enum LocalContextPlanner {
                 updatedTitle: item.updatedTitle,
                 updatedDetail: item.updatedDetail,
                 updatedReasoning: item.clampedReasoning,
+                corePrinciple: item.corePrinciple,
+                flexibleSwapHint: item.flexibleSwapHint,
                 sortOrder: matchedCard?.sortOrder ?? (daySnapshot?.actionCards.count ?? 0) + index
             )
         }
@@ -619,6 +649,87 @@ enum LocalContextPlanner {
                 proposedPhase: phase,
                 phaseSpec: acuteSpec,
                 summary: "识别到短期脾胃受寒、疲劳或舌苔信号，已按「急则治其标」切换至 3 天温和恢复期。",
+                source: .offlineDemo,
+                diffs: diffs
+            )
+        }
+
+        // 偏离食谱 / 聚餐吃重口 / 晚上还饿想加餐：零负罪感共情兜底
+        if effectiveInput.contains("聚餐") || effectiveInput.contains("吃多了") || effectiveInput.contains("没按计划") || effectiveInput.contains("火锅") || effectiveInput.contains("烧烤") {
+            if let dinnerCard = existingCards.first(where: { $0.category == .diet && ($0.sortOrder == 3 || $0.timeSlot.contains("18:") || $0.timeSlot.contains("19:")) })
+                ?? existingCards.last(where: { $0.category == .diet }) {
+                let adapted = DietaryAdaptationHelper.adaptCard(
+                    title: "冬瓜萝卜陈皮清顺汤（不吃主食）",
+                    detail: "聚餐或没按计划吃完全没关系！下一餐吃一碗热冬瓜白萝卜汤配少许绿叶菜，餐后散步 15 分钟消食即可。",
+                    reasoning: "偶尔解馋不焦虑，清顺汤水把多出的油湿拉回来。",
+                    timeSlot: dinnerCard.timeSlot,
+                    diningEnvironment: env,
+                    dietaryPreferences: dietaryPreferences
+                )
+                diffs.append(
+                    CardAdjustmentDiff(
+                        dayOffset: 0,
+                        targetCardID: dinnerCard.id,
+                        category: .diet,
+                        timeSlot: dinnerCard.timeSlot,
+                        previousTitle: dinnerCard.title,
+                        updatedTitle: adapted.title,
+                        updatedDetail: adapted.detail,
+                        updatedReasoning: adapted.reasoning,
+                        corePrinciple: "下一餐减负清顺，不自责不节食",
+                        flexibleSwapHint: "外食点不到萝卜汤？点一份白灼生菜+热柠檬陈皮水也同样管用。",
+                        sortOrder: dinnerCard.sortOrder
+                    )
+                )
+            }
+
+            return AdjustmentProposal(
+                userInput: effectiveInput,
+                triageSummary: nil,
+                detectedSymptoms: symptoms,
+                proposedPhase: snapshot.recoveryPhase,
+                phaseSpec: defaultPhaseSpec,
+                summary: "偶尔聚餐或没按食谱吃完全没关系，身体看的是长期节奏！下一餐用清淡热汤顺一下就拉回来了。",
+                source: .offlineDemo,
+                diffs: diffs
+            )
+        }
+
+        if effectiveInput.contains("还饿") || effectiveInput.contains("饿了") || effectiveInput.contains("加餐") {
+            if let dinnerCard = existingCards.first(where: { $0.category == .diet && ($0.sortOrder == 3 || $0.timeSlot.contains("18:") || $0.timeSlot.contains("19:")) })
+                ?? existingCards.last(where: { $0.category == .diet }) {
+                let adapted = DietaryAdaptationHelper.adaptCard(
+                    title: "\(dinnerCard.title) + 绿灯安心加餐",
+                    detail: "千万别硬扛挨饿，硬饿反伤脾胃！睡前 2 小时外若还饿，可加半杯温无糖豆浆、1 个水煮蛋或 2 块蒸山药。",
+                    reasoning: "补温热低脂绿灯蛋白，既解饿又不增加痰湿。",
+                    timeSlot: dinnerCard.timeSlot,
+                    diningEnvironment: env,
+                    dietaryPreferences: dietaryPreferences
+                )
+                diffs.append(
+                    CardAdjustmentDiff(
+                        dayOffset: 0,
+                        targetCardID: dinnerCard.id,
+                        category: .diet,
+                        timeSlot: dinnerCard.timeSlot,
+                        previousTitle: dinnerCard.title,
+                        updatedTitle: adapted.title,
+                        updatedDetail: adapted.detail,
+                        updatedReasoning: adapted.reasoning,
+                        corePrinciple: "饥饿优先补绿灯温热蛋白，拒绝硬饿",
+                        flexibleSwapHint: "常见绿灯加餐：热无糖豆浆、水煮蛋、蒸山药、温热小番茄。",
+                        sortOrder: dinnerCard.sortOrder
+                    )
+                )
+            }
+
+            return AdjustmentProposal(
+                userInput: effectiveInput,
+                triageSummary: nil,
+                detectedSymptoms: symptoms,
+                proposedPhase: snapshot.recoveryPhase,
+                phaseSpec: defaultPhaseSpec,
+                summary: "食谱分量只是参考，真饿了千万别硬扛！已为你加上绿灯安全加餐建议，放心吃一点。",
                 source: .offlineDemo,
                 diffs: diffs
             )
@@ -1526,12 +1637,70 @@ enum LocalContextPlanner {
             ? "前 3 天先以温和方案「以方测证」，第 2 天复诊后将自动提升置信度。"
             : "四诊信息充分，已直接建立专属日常顺时方案。"
 
+        let plainDiagnosis: String
+        let strategyOverview: String
+        let expectedTimeline: String
+        let boundary: AIDietaryBoundaryPayload
+
+        if primary.contains("寒热错杂") {
+            plainDiagnosis = "你目前主要是「上面容易上火、下面却怕冷」，脾胃运化偏弱，单纯大补容易上火、单纯清凉又容易拉肚子。"
+            strategyOverview = "先用「清上温下、平调中焦」的温和茶饮和软食把脾胃稳住，避免冰冷和辛辣，运动以微汗导引为主。"
+            expectedTimeline = needsTrial
+                ? "前 3 天观察口干与畏寒变化（第 2 天会提醒复诊微调），一般 1～2 周睡眠和腹温会更稳。"
+                : "坚持 7～14 天温和平调后，口腔上火与下肢发凉的割裂感会明显缓解。"
+            boundary = AIDietaryBoundaryPayload(
+                greenLightFoods: ["温热小米粥", "蒸山药/百合", "水煮蛋/嫩豆腐", "温热无糖豆浆", "常温苹果"],
+                yellowLightLimit: ["杂粮饭半碗", "去皮鸡肉/清蒸鱼少量"],
+                redLightAvoid: ["辛辣烧烤", "冰镇饮品", "纯姜大补汤", "寒凉生冷海鲜"],
+                flexibilityNote: "食谱只是省心示范，只要避开太辣太冰、保持温热七分饱，外食换同类家常菜一样算达标。"
+            )
+        } else if primary.contains("湿热") {
+            plainDiagnosis = "你目前主要是「脾胃湿滞偏热」，容易出现口干口苦、大便偏黏或皮肤发油，不适合直接喝姜茶等温燥食物。"
+            strategyOverview = "先撤掉温燥调料，用「清利湿热、轻食通腑」把积热湿浊疏导出去，再逐步恢复高蛋白减重节奏。"
+            expectedTimeline = needsTrial
+                ? "前 3 天看口苦与排便黏腻是否减轻（第 2 天复诊确认），约 1～2 周体感会明显清爽。"
+                : "按此节奏坚持 1～2 周，晨起口苦和大便粘滞通常会明显改善。"
+            boundary = AIDietaryBoundaryPayload(
+                greenLightFoods: ["冬瓜/丝瓜/苦瓜", "嫩豆腐/清蒸蛋白", "炒薏米荷叶淡茶", "温热绿叶菜"],
+                yellowLightLimit: ["杂粮饭半碗", "温和清甜水果少量"],
+                redLightAvoid: ["火锅烧烤油炸", "老姜肉桂进补", "冰镇奶茶啤酒", "甜腻糕点"],
+                flexibilityNote: "不必逐字照做：做到「清淡少油+少甜少辣」，聚餐时多夹绿叶菜和清炖蛋白、用热汤涮去浮油即可。"
+            )
+        } else if primary.contains("阳虚") {
+            plainDiagnosis = "你目前主要是「脾阳偏虚、体内有寒湿」，一吃凉的或吹风就容易腹部不适、手脚凉、精力偏乏。"
+            strategyOverview = "先做「温中散寒、培土固胃」，早上一定要吃温热谷物护胃，暂避生冷果蔬和冰饮，把阳气慢慢养回来。"
+            expectedTimeline = needsTrial
+                ? "前 3 天观察喝完温饮后胃里是否暖和、大便是否成形，一般 2～3 周手脚发凉和乏力会改善。"
+                : "坚持 2 周温养脾胃后，对生冷的敏感度和午后犯困感都会明显降低。"
+            boundary = AIDietaryBoundaryPayload(
+                greenLightFoods: ["热小米南瓜粥", "水煮蛋/温热鸡汤", "蒸山药红薯", "生姜陈皮红枣茶"],
+                yellowLightLimit: ["清淡炒时蔬", "温水烫过的水果"],
+                redLightAvoid: ["冰饮冷酸奶", "生冷沙拉刺生", "螃蟹等寒凉海鲜", "空腹喝凉茶"],
+                flexibilityNote: "重点在于「食物必须是温热的」且别挨饿，日常外食换成热汤面、热粥配蛋白同样很好。"
+            )
+        } else {
+            plainDiagnosis = "你目前主要是「脾胃运化偏慢、水湿容易停滞」（\(primary)），还带一点轻微气虚，所以容易午后犯困、体重难降。"
+            strategyOverview = "先用 3 天温和方式「唤醒脾胃、轻量祛湿」，再进入高蛋白低碳水减重与护膝运动，不搞伤胃的激进节食。"
+            expectedTimeline = needsTrial
+                ? "前 3 天观察大便成型度与午后困倦感（第 2 天复诊校准），一般 7～14 天能感到身体变轻快。"
+                : "坚持 14 天顺时节奏后，晨起浮肿沉重感会减轻，体重也会开始稳步回落。"
+            boundary = AIDietaryBoundaryPayload(
+                greenLightFoods: ["水煮蛋/蒸蛋", "温热无糖豆浆", "蒸山药/玉米", "清炖鸡胸/瘦肉/豆腐", "时令绿叶菜"],
+                yellowLightLimit: ["糙米/杂粮饭半碗", "常温微甜水果少量"],
+                redLightAvoid: ["冰镇饮品", "高糖奶茶糕点", "宵夜炸物烧烤", "过量寒凉海鲜"],
+                flexibilityNote: "不必把推荐食谱当考卷：按推荐吃七八分饱，饿了直接从绿灯区加餐，聚餐偏离了下一餐清淡拉回即可。"
+            )
+        }
+
         return AIOnboardingConstitutionResponse(
             primaryConstitution: primary,
             secondaryTags: secondary,
             confidencePercent: confidence,
             needsThreeDayTrial: needsTrial,
             clinicalSummary: "初诊倾向「\(primary)」\(secondary.isEmpty ? "" : "兼\(secondary.joined(separator: "、"))")（置信度 \(confidence)%）。\(trialHint)",
+            plainDiagnosis: plainDiagnosis,
+            strategyOverview: strategyOverview,
+            expectedTimeline: expectedTimeline,
             suggestedPhaseSpec: AIRegimenPhasePayload(
                 stageKind: stageKind.rawValue,
                 phaseName: phaseName,
@@ -1542,7 +1711,8 @@ enum LocalContextPlanner {
                     : "排便成形、晨起轻快不困重且作息平稳",
                 nextStageHint: needsTrial
                     ? "第 2～3 天复诊确认耐受后，置信度升至 82%+ 并进入稳态期"
-                    : "持续顺时固本，随二十四节气微调"
+                    : "持续顺时固本，随二十四节气微调",
+                dietaryBoundary: boundary
             ),
             initialDayCards: cards,
             baselineDeltaSummary: "完成四诊合参建档（初始置信度 \(confidence)%）",

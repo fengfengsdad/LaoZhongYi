@@ -2,6 +2,20 @@ import Foundation
 
 // MARK: - Structured Outputs Swift Models (Strict JSON Schema Decodable)
 
+struct AIDietaryBoundaryPayload: Codable, Sendable {
+    let greenLightFoods: [String]
+    let yellowLightLimit: [String]
+    let redLightAvoid: [String]
+    let flexibilityNote: String
+
+    static let defaultMaintenance = AIDietaryBoundaryPayload(
+        greenLightFoods: ["水煮蛋/蒸蛋", "温热无糖豆浆", "蒸山药/南瓜", "清炖鸡胸/瘦肉/嫩豆腐", "温热绿叶菜"],
+        yellowLightLimit: ["杂粮饭半碗", "常温微甜水果少量"],
+        redLightAvoid: ["冰镇饮品", "高糖奶茶糕点", "油炸烧烤宵夜", "过量寒凉海鲜"],
+        flexibilityNote: "食谱只是省心示范，做到「温热+少油+优质蛋白」就算达标；饿了可从绿灯加餐，不必硬扛。"
+    )
+}
+
 struct AIRegimenPhasePayload: Codable, Sendable {
     let stageKind: String
     let phaseName: String
@@ -9,6 +23,25 @@ struct AIRegimenPhasePayload: Codable, Sendable {
     let plannedDays: Int
     let exitCriteria: String
     let nextStageHint: String
+    let dietaryBoundary: AIDietaryBoundaryPayload
+
+    init(
+        stageKind: String,
+        phaseName: String,
+        therapeuticPrinciple: String,
+        plannedDays: Int,
+        exitCriteria: String,
+        nextStageHint: String,
+        dietaryBoundary: AIDietaryBoundaryPayload = .defaultMaintenance
+    ) {
+        self.stageKind = stageKind
+        self.phaseName = phaseName
+        self.therapeuticPrinciple = therapeuticPrinciple
+        self.plannedDays = plannedDays
+        self.exitCriteria = exitCriteria
+        self.nextStageHint = nextStageHint
+        self.dietaryBoundary = dietaryBoundary
+    }
 
     var resolvedStageKind: RegimenStageKind {
         RegimenStageKind.infer(from: stageKind)
@@ -37,6 +70,26 @@ struct AIPlannedCardPayload: Codable, Sendable {
     let title: String
     let actionDetail: String
     let reasoning: String
+    let corePrinciple: String
+    let flexibleSwapHint: String
+
+    init(
+        category: String,
+        timeSlot: String,
+        title: String,
+        actionDetail: String,
+        reasoning: String,
+        corePrinciple: String = "",
+        flexibleSwapHint: String = ""
+    ) {
+        self.category = category
+        self.timeSlot = timeSlot
+        self.title = title
+        self.actionDetail = actionDetail
+        self.reasoning = reasoning
+        self.corePrinciple = corePrinciple
+        self.flexibleSwapHint = flexibleSwapHint
+    }
 
     var resolvedCategory: ActionCategory {
         ActionCategory(rawValue: category) ?? .lifestyle
@@ -72,6 +125,30 @@ struct AICardDiffPayload: Codable, Sendable {
     let updatedTitle: String
     let updatedDetail: String
     let updatedReasoning: String
+    let corePrinciple: String
+    let flexibleSwapHint: String
+
+    init(
+        dayOffset: Int,
+        targetCardID: String?,
+        category: String,
+        timeSlot: String,
+        updatedTitle: String,
+        updatedDetail: String,
+        updatedReasoning: String,
+        corePrinciple: String = "",
+        flexibleSwapHint: String = ""
+    ) {
+        self.dayOffset = dayOffset
+        self.targetCardID = targetCardID
+        self.category = category
+        self.timeSlot = timeSlot
+        self.updatedTitle = updatedTitle
+        self.updatedDetail = updatedDetail
+        self.updatedReasoning = updatedReasoning
+        self.corePrinciple = corePrinciple
+        self.flexibleSwapHint = flexibleSwapHint
+    }
 
     var resolvedCategory: ActionCategory {
         ActionCategory(rawValue: category) ?? .lifestyle
@@ -110,6 +187,22 @@ struct AICardSwapResponse: Codable, Sendable {
     let title: String
     let actionDetail: String
     let reasoning: String
+    let corePrinciple: String
+    let flexibleSwapHint: String
+
+    init(
+        title: String,
+        actionDetail: String,
+        reasoning: String,
+        corePrinciple: String = "",
+        flexibleSwapHint: String = ""
+    ) {
+        self.title = title
+        self.actionDetail = actionDetail
+        self.reasoning = reasoning
+        self.corePrinciple = corePrinciple
+        self.flexibleSwapHint = flexibleSwapHint
+    }
 
     var clampedReasoning: String {
         let trimmed = reasoning.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -145,6 +238,9 @@ struct AIOnboardingConstitutionResponse: Codable, Sendable {
     let confidencePercent: Int
     let needsThreeDayTrial: Bool
     let clinicalSummary: String
+    let plainDiagnosis: String
+    let strategyOverview: String
+    let expectedTimeline: String
     let suggestedPhaseSpec: AIRegimenPhasePayload
     let initialDayCards: [AIPlannedCardPayload]
     let baselineDeltaSummary: String

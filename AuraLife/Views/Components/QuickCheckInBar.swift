@@ -18,6 +18,8 @@ struct QuickCheckInBar: View {
     @State private var showQuickChips: Bool = false
 
     private let quickPrompts = [
+        "中午聚餐吃多了 / 没按计划吃",
+        "晚上还饿想加餐",
         "昨晚吃坏肚子了",
         "昨晚熬夜吃了螃蟹、大便发黏",
         "今天不想室外游泳，想改到室内",

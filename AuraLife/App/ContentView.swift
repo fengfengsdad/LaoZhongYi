@@ -9,7 +9,7 @@ struct ContentView: View {
     var body: some View {
         Group {
             if hasCompletedOnboarding {
-                TodayTimelineView()
+                MainTabView()
             } else {
                 OnboardingFlowView {
                     withAnimation(.easeInOut(duration: 0.28)) {
